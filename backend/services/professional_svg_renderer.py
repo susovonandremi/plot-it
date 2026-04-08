@@ -1386,9 +1386,10 @@ def render_room_labels(placed_rooms, scale, offset_x, offset_y, dwg,
         rid = room.get('id', rtype)
         parts = rid.rsplit('_', 1)
         suffix = parts[1] if len(parts) > 1 and parts[1].isdigit() else ''
-        base_name = ROOM_DISPLAY_NAMES.get(rtype, rtype.upper())
+        # PROFESSIONAL STANDARD: Use architectural label if provided
+        base_name = room.get('label', ROOM_DISPLAY_NAMES.get(rtype, rtype.upper()))
         
-        if room['width'] < 8.0: 
+        if room['width'] < 8.0 and not room.get('label'): 
             base_name = {'MASTER BEDROOM': 'M.B.', 'BEDROOM': 'BED', 'LIVING ROOM': 'LIV.', 'BATHROOM': 'BTH', 'STAIRCASE': 'STR', 'ENTRANCE': 'E'}.get(base_name, base_name)
         display_name = f"{base_name} {suffix}".strip() if suffix else base_name
         

@@ -434,27 +434,28 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
             print(f"🛤️ Circulation: efficiency={circulation_data['efficiency_score']}%, "
                   f"corridors={len(circulation_data['corridors'])}")
 
-        # Final Dedup: Remove duplicate labels (especially multiple ROOFs)
+        # ── v3.0: ARCHITECTURAL FLOOR LABELING ────────────────────────────────
+        # Ensure clear sequencing: GROUND -> 1ST -> ... -> ROOF
+        FLOOR_LABELS = {}
+        for fn in all_floor_layouts.keys():
+            if fn == 0:
+                FLOOR_LABELS[fn] = "GROUND" # UI splits by space, use simple labels
+            elif fn == total_floors:
+                FLOOR_LABELS[fn] = "ROOF"
+            else:
+                suffix_map = {1: '1ST', 2: '2ND', 3: '3RD'}
+                lbl = suffix_map.get(fn, f"{fn}TH")
+                FLOOR_LABELS[fn] = f"{lbl} FLOOR"
+
         final_floor_layouts = {}
         final_floor_svgs = {}
         final_labels = {}
         seen_lbls = set()
         
-        FLOOR_LABELS = {}
-        for fn in all_floor_layouts:
-            label = program.get_floor_label(fn)
-            FLOOR_LABELS[fn] = label
-
-        # Dedup: if any intermediate floor got "ROOF PLAN", fix it
-        for fn in sorted(FLOOR_LABELS.keys()):
-            if fn > 0 and fn < roof_floor_num and FLOOR_LABELS[fn] == "ROOF PLAN":
-                suffix_map = {1: '1ST', 2: '2ND', 3: '3RD'}
-                FLOOR_LABELS[fn] = f"{suffix_map.get(fn, f'{fn}TH')} FLOOR PLAN"
-
         for fn in sorted(all_floor_layouts.keys()):
             lbl = FLOOR_LABELS.get(fn, f"FLOOR {fn}")
             if lbl in seen_lbls:
-                continue
+                continue # Prevent duplicate tabs
             seen_lbls.add(lbl)
             final_floor_layouts[fn] = all_floor_layouts[fn]
             final_labels[fn] = lbl
@@ -514,7 +515,7 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
         else:
             svg_blueprint = final_floor_svgs.get(0, "")
 
-        print(f"📐 Renderer: {len(floor_svgs)} floor SVGs generated")
+        print(f"📐 Renderer: {len(final_floor_svgs)} floor SVGs generated")
 
         # ── v3.0: PROPORTION VALIDATOR ─────────────────────────────────────────
         proportion_data = validate_proportions(placed_rooms)
