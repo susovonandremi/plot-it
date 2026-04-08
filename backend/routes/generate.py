@@ -435,27 +435,21 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
                   f"corridors={len(circulation_data['corridors'])}")
 
         # ── v3.0: ARCHITECTURAL FLOOR LABELING ────────────────────────────────
-        # Ensure clear sequencing: GROUND -> 1ST -> ... -> ROOF
-        FLOOR_LABELS = {}
-        for fn in all_floor_layouts.keys():
-            if fn == 0:
-                FLOOR_LABELS[fn] = "GROUND" # UI splits by space, use simple labels
-            elif fn == total_floors:
-                FLOOR_LABELS[fn] = "ROOF"
-            else:
-                suffix_map = {1: '1ST', 2: '2ND', 3: '3RD'}
-                lbl = suffix_map.get(fn, f"{fn}TH")
-                FLOOR_LABELS[fn] = f"{lbl} FLOOR"
+        unique_labels = {}
+        r_keys = sorted(all_floor_layouts.keys())
+        for fn in r_keys:
+            if fn == 0: unique_labels[fn] = "GROUND"
+            elif fn == r_keys[-1] and len(r_keys) > 1: unique_labels[fn] = "ROOF"
+            else: unique_labels[fn] = f"{fn}ST" if fn==1 else (f"{fn}ND" if fn==2 else f"{fn}TH")
 
         final_floor_layouts = {}
         final_floor_svgs = {}
         final_labels = {}
         seen_lbls = set()
         
-        for fn in sorted(all_floor_layouts.keys()):
-            lbl = FLOOR_LABELS.get(fn, f"FLOOR {fn}")
-            if lbl in seen_lbls:
-                continue # Prevent duplicate tabs
+        for fn in r_keys:
+            lbl = unique_labels.get(fn, f"F{fn}")
+            if lbl in seen_lbls: continue 
             seen_lbls.add(lbl)
             final_floor_layouts[fn] = all_floor_layouts[fn]
             final_labels[fn] = lbl

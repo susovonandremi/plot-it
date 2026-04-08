@@ -172,22 +172,14 @@ def generate_wall_boundary(
     
     shrunken: List[Polygon] = []
     for poly in room_polygons:
-        b = poly.bounds # (x1, y1, x2, y2)
-        
-        # Determine offsets for 4 sides: left, bottom, right, top
-        # Default to interior thickness
+        b = poly.bounds 
         offsets = [int_thickness/2.0] * 4
         
-        # Left edge (x = b[0])
         if abs(b[0] - effective_min_x) < TOL: offsets[0] = ext_thickness / 2.0
-        # Bottom edge (y = b[1])
         if abs(b[1] - effective_min_y) < TOL: offsets[1] = ext_thickness / 2.0
-        # Right edge (x = b[2])
         if abs(b[2] - effective_max_x) < TOL: offsets[2] = ext_thickness / 2.0
-        # Top edge (y = b[3])
         if abs(b[3] - effective_max_y) < TOL: offsets[3] = ext_thickness / 2.0
         
-        # For interior edges that are NOT shared with another room (unlikely in dense CP-SAT),
         # we still use int_thickness. But wait, if two rooms are 1ft apart, 
         # the space between them is already wall area.
         
@@ -361,22 +353,23 @@ class StructuralEngine:
         -------
         WallBoundaryGeometry
         """
-        plot_polygon: Polygon = shapely_box(
-            0.0, 0.0, self.plot_width, self.plot_height
-        )
-
         room_polygons: List[Polygon] = []
         for room in placed_rooms:
-            rx = float(room.get("x", 0))
-            ry = float(room.get("y", 0))
-            rw = float(room.get("width", 0))
-            rh = float(room.get("height", 0))
+            rx, ry = float(room.get("x", 0)), float(room.get("y", 0))
+            rw, rh = float(room.get("width", 0)), float(room.get("height", 0))
             if rw > 0 and rh > 0:
                 room_polygons.append(shapely_box(rx, ry, rx + rw, ry + rh))
 
+        if not room_polygons:
+            return generate_wall_boundary([], shapely_box(0,0,1,1))
+
+        # BUILDING ENVELOPE: Only render walls for the building footprint, 
+        # not the entire plot area (eliminates black voids in setbacks).
+        envelope = unary_union(room_polygons).buffer(1.2).envelope
+        
         return generate_wall_boundary(
             room_polygons=room_polygons,
-            plot_polygon=plot_polygon,
+            plot_polygon=envelope,
             ext_thickness=WALL_THICKNESS_FT,
             int_thickness=WALL_THICKNESS_FT / 2,
         )
