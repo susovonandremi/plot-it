@@ -1,0 +1,4 @@
+﻿STATUS: 200
+ENGINE: cpsat_optimal
+ROOMS: 3
+SVG LEN: 9400

@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  --color-dominant: #01000F;
+  --color-dominant-light: #0A0A1A;
+  --color-secondary: #FFFFFF;
+  --color-secondary-light: #E2E8F0;
+  --color-secondary-lighter: #F1F5F9;
+  --color-glass: rgba(255, 255, 255, 0.05);
+  --color-glass-hover: rgba(255, 255, 255, 0.1);
+  --color-accent: #00E5FF;
+  --color-accent-hover: #00B8CC;
+  
+  --shadow-neon: 0 0 15px rgba(0, 229, 255, 0.5);
+  --shadow-neon-hover: 0 0 25px rgba(0, 229, 255, 0.8);
+
+  --font-heading: "Archivo", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  @apply bg-dominant text-dominant-light font-body;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  @apply font-heading font-semibold;
+}
+
+code {
+  @apply font-mono;
+}
+
+/* Custom scrollbar for dark theme */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Firefox scrollbar support */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}

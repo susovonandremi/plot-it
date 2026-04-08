@@ -1,0 +1,59 @@
+﻿============================================================
+TEST 1: 30╫40 plot ù 2BHK
+============================================================
+Status: FEASIBLE
+Solve time: 5014.6ms
+Coverage: 96.0%
+Rooms placed: 8
+
+  master_bedroom_0      x=   0.0  y=   5.0  w= 16.0  h= 15.0  area= 240.0 sqft
+  bedroom_1             x=  17.0  y=   0.0  w= 12.0  h= 15.0  area= 180.0 sqft
+  kitchen_2             x=  17.0  y=  15.0  w= 13.0  h= 11.5  area= 149.5 sqft
+  living_3              x=   0.0  y=  26.5  w= 19.0  h= 13.5  area= 256.5 sqft
+  dining_4              x=  19.0  y=  26.5  w= 11.0  h= 13.5  area= 148.5 sqft
+  bathroom_5            x=   9.0  y=   0.0  w=  8.0  h=  5.0  area=  40.0 sqft
+  bathroom_6            x=   1.0  y=   0.0  w=  8.0  h=  5.0  area=  40.0 sqft
+  passage_7             x=   2.0  y=  20.0  w= 15.0  h=  6.5  area=  97.5 sqft
+
+Validation: PASS
+  Overlaps: 0
+
+============================================================
+TEST 2: 20╫30 plot ù 1BHK (tight)
+============================================================
+Status: OPTIMAL
+Solve time: 1621.7ms
+Coverage: 98.7%
+  bedroom_0             x=  10.0  y=   0.0  w= 10.0  h= 11.0  area= 110.0 sqft
+  kitchen_1             x=   0.0  y=   0.0  w= 10.0  h= 15.0  area= 150.0 sqft
+  living_2              x=   0.0  y=  15.0  w= 20.0  h= 15.0  area= 300.0 sqft
+  bathroom_3            x=  10.0  y=  11.0  w=  8.0  h=  4.0  area=  32.0 sqft
+
+Validation: PASS
+  Overlaps: 0
+
+============================================================
+TEST 3: 40╫60 plot ù 3BHK (spacious)
+============================================================
+Status: FEASIBLE
+Solve time: 5012.1ms
+Coverage: 70.1%
+Rooms placed: 13
+  master_bedroom_0      x=   0.0  y=  36.5  w= 13.0  h= 18.0  area= 234.0 sqft
+  bedroom_1             x=  25.0  y=  27.0  w= 12.0  h= 15.0  area= 180.0 sqft
+  bedroom_2             x=   2.5  y=  24.5  w= 15.0  h= 12.0  area= 180.0 sqft
+  kitchen_3             x=  12.5  y=  12.0  w= 12.0  h= 12.5  area= 150.0 sqft
+  living_4              x=  14.0  y=  45.0  w= 20.0  h= 15.0  area= 300.0 sqft
+  dining_5              x=  24.5  y=  12.0  w= 10.0  h= 15.0  area= 150.0 sqft
+  bathroom_6            x=  17.5  y=  24.5  w=  6.5  h=  8.0  area=  52.0 sqft
+  bathroom_7            x=  17.0  y=  38.5  w=  8.0  h=  6.5  area=  52.0 sqft
+  bathroom_8            x=  13.0  y=  36.5  w=  4.0  h=  8.0  area=  32.0 sqft
+  pooja_9               x=  17.5  y=  32.5  w=  7.5  h=  6.0  area=  45.0 sqft
+  study_10              x=  22.5  y=   2.0  w= 13.0  h= 10.0  area= 130.0 sqft
+  passage_11            x=   6.0  y=   9.5  w=  6.5  h= 15.0  area=  97.5 sqft
+  staircase_12          x=  12.5  y=   4.0  w= 10.0  h=  8.0  area=  80.0 sqft
+
+Validation: PASS
+  Overlaps: 0
+
+All tests complete!
