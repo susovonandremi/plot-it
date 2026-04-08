@@ -605,18 +605,23 @@ class BuildingProgram:
             return rtype.lower().replace(' ', '_').replace('_room', '')
 
         if floor_number == 0:
-            # GROUND FLOOR: PUBLIC ZONE
-            # 1. Mandatory Public Infrastructure
-            rooms.append({'type': 'car_parking', 'count': 1, 'area_hint': 200, 'label': 'CAR PARKING'}) # 10x20
-            rooms.append({'type': 'foyer', 'count': 1, 'area_hint': 48, 'label': 'FOYER'}) # 6x8
-            rooms.append({'type': 'staircase', 'count': 1, 'area_hint': 50, 'label': 'STAIRCASE'}) # 5x10
+            # GROUND FLOOR: Public zone — hardcoded to real-world AutoCAD standard dimensions
+            # Based on: 30'×50' plot, buildable ~24'×44' after setbacks
+            # Circulation sequence: Entry Gate → Foyer (6'×8') → Living (12'×14') → Dining (10'×10') → Kitchen (10'×8', rear)
+            
+            rooms.append({'type': 'car_parking',  'count': 1, 'area_hint': 200, 'label': 'CAR PORCH',
+                          'notes': '11\'×15\' standard car porch'})              # 165 sqft
+            rooms.append({'type': 'foyer',        'count': 1, 'area_hint': 48,  'label': 'FOYER',
+                          'notes': '6\'×8\' entry foyer'})                       # 48 sqft
+            rooms.append({'type': 'staircase',    'count': 1, 'area_hint': 70,  'label': 'STAIRCASE',
+                          'notes': '7\'×10\' with 10" treads × 13 risers'})     # 70 sqft
             
             if self.has_lift:
                 rooms.append({'type': 'lift', 'count': 1, 'area_hint': 25, 'label': 'LIFT'})
 
-            # 2. Infrastructure/Utilities
-            rooms.append({'type': 'sump', 'count': 1, 'area_hint': 35, 'is_external': True, 'label': 'SUMP'})
-            rooms.append({'type': 'septic_tank', 'count': 1, 'area_hint': 35, 'is_external': True, 'label': 'SEPTIC TANK'})
+            # NOTE: sump and septic are EXTERNAL — keep is_external flag
+            rooms.append({'type': 'sump',         'count': 1, 'area_hint': 24,  'is_external': True, 'label': 'SUMP'})
+            rooms.append({'type': 'septic_tank',  'count': 1, 'area_hint': 24,  'is_external': True, 'label': 'SEPTIC'})
             
             # 3. Pull Public rooms from user_rooms if available
             public_types = ['living', 'dining', 'kitchen', 'guest_bath', 'bathroom', 'toilet', 'wc', 'pooja', 'utility', 'wash']
@@ -641,8 +646,10 @@ class BuildingProgram:
 
         elif floor_number == 1 and not is_single_story:
             # 1ST FLOOR: PRIVATE ZONE (Dynamic based on BHK)
-            rooms.append({'type': 'passage', 'count': 1, 'area_hint': 80, 'label': 'CORRIDOR', 'notes': 'Min 4ft wide spine'})
-            rooms.append({'type': 'staircase', 'count': 1, 'area_hint': 50, 'label': 'STAIRCASE'})
+            rooms.append({'type': 'passage',   'count': 1, 'area_hint': 60,  'label': 'CORRIDOR',
+                          'notes': '4\'×15\' spine corridor — min 4ft clear width required'})
+            rooms.append({'type': 'staircase', 'count': 1, 'area_hint': 70,  'label': 'STAIRCASE',
+                          'notes': 'Vertical alignment — same XY as ground floor staircase'})
             
             if self.has_lift:
                 rooms.append({'type': 'lift', 'count': 1, 'area_hint': 25, 'label': 'LIFT'})
@@ -652,8 +659,10 @@ class BuildingProgram:
             if requested_bedrooms == 0: requested_bedrooms = 2 # Default to 2BHK upper if unknown
             
             # 1. Master Bedroom & Bath (Front) - Always present
-            rooms.append({'type': 'bedroom', 'count': 1, 'area_hint': 160, 'label': 'MASTER BEDROOM'}) 
-            rooms.append({'type': 'bathroom', 'count': 1, 'area_hint': 40, 'label': 'MASTER BATH'})
+            rooms.append({'type': 'bedroom',   'count': 1, 'area_hint': 154, 'label': 'MASTER BEDROOM',
+                          'notes': '11\'×14\' master — road-facing for ventilation'})
+            rooms.append({'type': 'bathroom',  'count': 1, 'area_hint': 40,  'label': 'MASTER BATH',
+                          'notes': '5\'×8\' attached to master'})
             if self.has_balcony:
                 rooms.append({'type': 'balcony', 'count': 1, 'area_hint': 24, 'label': 'BALCONY'})
             
@@ -672,9 +681,14 @@ class BuildingProgram:
 
         elif floor_number >= floors_total:
             # ROOF FLOOR
-            rooms.append({'type': 'overhead_water_tank', 'count': 1, 'area_hint': 16, 'label': 'OHT (4\'x4\')'}) # 4x4
-            rooms.append({'type': 'stair_room', 'count': 1, 'area_hint': 40, 'label': 'MUMTY'}) # Staircase exit
-            rooms.append({'type': 'open_terrace', 'count': 1, 'area_hint': self.plot_area - 100, 'label': 'OPEN TERRACE'})
+            rooms.append({'type': 'overhead_water_tank', 'count': 1, 'area_hint': 16,
+                          'label': 'OHT',   'notes': '4\'×4\' overhead tank at NE corner'})
+            rooms.append({'type': 'stair_room',          'count': 1, 'area_hint': 56,
+                          'label': 'MUMTY', 'notes': '7\'×8\' staircase exit room'})
+            rooms.append({'type': 'open_terrace',        'count': 1,
+                          'area_hint': max(100, self.plot_area - 200),
+                          'label': 'OPEN TERRACE',
+                          'notes': 'Remaining roof slab with 3\' parapet wall'})
             
         else:
             # Fallback for Generic Upper Floors (N > 1)
@@ -1030,7 +1044,8 @@ def generate_roof_floor_layout(
     # ── 2. OHWR ────────────────────────────────────────────────────────
     ohwr = {
         'id': 'ohwr', 'type': 'overhead_water_tank',
-        'x': 0, 'y': 0,
+        'x': round(plot_width - 8.28, 2),   # NE corner (rear of typical N-facing plot)
+        'y': round(plot_depth - 8.28, 2),
         'width': 8.28, 'height': 8.28,
         'area': round(8.28 * 8.28, 1),
         'floor': roof_floor_num,
@@ -1046,7 +1061,7 @@ def generate_roof_floor_layout(
         'floor': roof_floor_num,
         'is_annotation': True
     }
-    rooms.insert(0, terrace)
+    rooms.append(terrace)   # Terrace renders LAST (bottommost SVG layer, covered by OHT/MUMTY)
 
     # ── 3. MACHINE ROOM (For Lift) ─────────────────────────────────────
     if has_lift:

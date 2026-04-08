@@ -155,11 +155,17 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
              elif "entry east" in p_lower or "facing east" in p_lower: request_data.entry_direction = "E"
              elif "entry west" in p_lower or "facing west" in p_lower: request_data.entry_direction = "W"
 
-        # ── ARCHITECTURAL RULE: Independent houses with bedrooms are ALWAYS G+1 ──
-        if request_data.building_type == "independent_house" and request_data.floors == 1:
+        # Normalize building type for reliable comparison
+        norm_btype = (request_data.building_type or "independent_house").lower().strip().replace(" ", "_")
+        
+        # G+1 override: independent houses with bedrooms are always at least 2 floors
+        if norm_btype in ("independent_house", "villa", "row_house") and request_data.floors <= 1:
             total_floors = 2
         else:
-            total_floors = request_data.floors
+            total_floors = max(request_data.floors, 1)
+        
+        # Clamp roof floor number to total_floors
+        roof_floor_num = total_floors   # 0=ground, 1..total_floors-1=residential, total_floors=roof
 
         plot_side = round(math.sqrt(request_data.plot_size_sqft), 1)
         plot_width = request_data.plot_width_ft or plot_side
@@ -168,7 +174,7 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
         program = create_building_program(
             plot_area=request_data.plot_size_sqft,
             user_rooms=raw_rooms,
-            building_type=request_data.building_type,
+            building_type=norm_btype,    # use normalized type, not raw request_data.building_type
             floor_number=request_data.floor_number,
             floors_total=total_floors,
             entry_direction=request_data.entry_direction,
@@ -188,8 +194,8 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
 
         # ── VASTU ENGINE ──────────────────────────────────────────────────────
         # For 1-story: Floor 0 has residentials. For Multi-story: Floor 1 is core.
-        core_fn = 1 if request_data.floors > 1 else 0
-        vastu_rooms = program.get_floor_program(core_fn, request_data.floors)
+        core_fn = 1 if total_floors > 1 else 0
+        vastu_rooms = program.get_floor_program(core_fn, total_floors)
         vastu_assignments = assign_vastu_zones(vastu_rooms)
         vastu_results = calculate_vastu_score(vastu_assignments)
 
@@ -263,7 +269,7 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
             external_rooms = [r for r in floor_rooms if r.get('is_external', False)]
 
             # Ground floor: stilt layout if non-independent multi-story, else full CPSAT
-            is_independent = request_data.building_type == "independent_house"
+            is_independent = norm_btype in ("independent_house", "villa", "row_house")
             if floor_num == 0 and total_floors > 1 and not is_independent:
                 # ── GROUND FLOOR: parking + utilities (fixed positions) ───
                 floor_layout = generate_ground_floor_layout(
@@ -428,26 +434,34 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
             print(f"🛤️ Circulation: efficiency={circulation_data['efficiency_score']}%, "
                   f"corridors={len(circulation_data['corridors'])}")
 
-        # ── FEATURE B: Vastu Heatmap ──────────────────────────────────────────
-        vastu_heatmap_data = None
-        room_scores = calculate_room_vastu_scores(placed_rooms, vastu_assignments)
-        placed_rooms_scored = apply_vastu_resizing(placed_rooms, room_scores, request_data.plot_size_sqft)
+        # Final Dedup: Remove duplicate labels (especially multiple ROOFs)
+        final_floor_layouts = {}
+        final_floor_svgs = {}
+        final_labels = {}
+        seen_lbls = set()
+        
+        FLOOR_LABELS = {}
+        for fn in all_floor_layouts:
+            label = program.get_floor_label(fn)
+            FLOOR_LABELS[fn] = label
 
-        if request_data.enable_heatmap:
-            vastu_heatmap_data = generate_vastu_heatmap(
-                placed_rooms_scored, room_scores,
-                plot_width=plot_width, plot_height=plot_depth
-            )
-            print(f"🌡️ Vastu Heatmap: avg_score={vastu_heatmap_data['avg_score']}, "
-                  f"cells={len(vastu_heatmap_data['cells'])}")
+        # Dedup: if any intermediate floor got "ROOF PLAN", fix it
+        for fn in sorted(FLOOR_LABELS.keys()):
+            if fn > 0 and fn < roof_floor_num and FLOOR_LABELS[fn] == "ROOF PLAN":
+                suffix_map = {1: '1ST', 2: '2ND', 3: '3RD'}
+                FLOOR_LABELS[fn] = f"{suffix_map.get(fn, f'{fn}TH')} FLOOR PLAN"
 
-        # ── FEATURE E: Structural Analysis ────────────────────────────────────
+        for fn in sorted(all_floor_layouts.keys()):
+            lbl = FLOOR_LABELS.get(fn, f"FLOOR {fn}")
+            if lbl in seen_lbls:
+                continue
+            seen_lbls.add(lbl)
+            final_floor_layouts[fn] = all_floor_layouts[fn]
+            final_labels[fn] = lbl
+
+        # ── FEATURE E: Structural Analysis (Init engine) ──────────────────────
+        struct_engine = StructuralEngine(plot_width, plot_depth)
         structural_data = None
-        if request_data.enable_structural:
-            struct_engine = StructuralEngine(plot_width, plot_depth)
-            structural_data = struct_engine.analyze(placed_rooms)
-            print(f"🏗️ Structural: {structural_data['structural_summary']['total_columns']} columns, "
-                  f"{structural_data['structural_summary']['structural_system']}")
 
         # ── v3.0: ACCESSIBILITY ENGINE ─────────────────────────────────────────
         updated_doors, accessibility_report = ensure_full_accessibility(
@@ -455,50 +469,50 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
             doors=[],
             entry_direction=request_data.entry_direction
         )
-        print(f"🚪 Accessibility: {accessibility_report.get('door_count', 0)} doors, fixes: {accessibility_report.get('fixes_applied', 0)}")
 
         # ── v3.0: FURNITURE ENGINE ─────────────────────────────────────────────
         furniture_placements = []
         if request_data.include_furniture:
             furniture_placements = FurnitureEngine(placed_rooms, updated_doors)
-            print(f"🛋️ Furniture Engine: Placed {len(furniture_placements)} items")
 
-        # ══════════════════════════════════════════════════════════════════════
-        # PER-FLOOR SVG RENDERING
-        # ══════════════════════════════════════════════════════════════════════
-        FLOOR_LABELS = {}
-        for fn in all_floor_layouts:
-            FLOOR_LABELS[fn] = program.get_floor_label(fn)
+        # ── PER-FLOOR RENDERING ──
+        for fn, floor_rooms_list in final_floor_layouts.items():
+            # Compute structural columns per-floor for accuracy
+            floor_structural_data = struct_engine.find_column_positions(
+                floor_rooms_list, norm_btype, total_floors
+            )
+            
+            # Track principal structural data for top-level response
+            if fn == 1 or (fn == 0 and structural_data is None):
+                structural_data = floor_structural_data
 
-        for fn, floor_rooms_list in all_floor_layouts.items():
             try:
                 floor_svg = render_blueprint_professional(
                     placement_data=floor_rooms_list,
                     plot_width=plot_width,
                     plot_height=plot_depth,
+                    scale=SCALE,
+                    floor_label=final_labels.get(fn, f"FLOOR {fn}"),
                     vastu_score=vastu_results,
                     user_tier=request_data.user_tier,
                     original_unit_system=request_data.original_unit_system,
-                    heavy_elements=structural_data if request_data.enable_structural else None,
+                    heavy_elements=floor_structural_data,
                     building_program=program,
                     floor_number=fn,
                     shape_config=shape_config,
                     style_metadata=style_metadata,
                     furniture_items=furniture_placements if fn >= 1 and fn <= total_floors else [],
                 )
-                floor_svgs[fn] = floor_svg
+                final_floor_svgs[fn] = floor_svg
             except Exception as svg_err:
                 print(f"⚠️ SVG render failed for floor {fn}: {svg_err}")
-                floor_svgs[fn] = ""
+                final_floor_svgs[fn] = ""
 
-        # Alternative SVGs (reserved for future enhancement)
-        alternative_svg = None
-
-        # Primary SVG returned in top-level field (1st Floor if multi, else Ground)
+        # Primary SVG (use 1st floor if multi-story, else ground)
         if total_floors > 0:
-            svg_blueprint = floor_svgs.get(1, floor_svgs.get(0, ""))
+            svg_blueprint = final_floor_svgs.get(1, final_floor_svgs.get(0, ""))
         else:
-            svg_blueprint = floor_svgs.get(0, "")
+            svg_blueprint = final_floor_svgs.get(0, "")
 
         print(f"📐 Renderer: {len(floor_svgs)} floor SVGs generated")
 
@@ -562,10 +576,10 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
             "floors_generated": len(all_floor_layouts),
 
             # Multi-floor layouts & SVGs
-            "floor_svgs": {str(fn): svg for fn, svg in floor_svgs.items()},
-            "floor_labels": {str(fn): lbl for fn, lbl in FLOOR_LABELS.items()},
+            "floor_svgs": {str(fn): svg for fn, svg in final_floor_svgs.items()},
+            "floor_labels": {str(fn): lbl for fn, lbl in final_labels.items()},
             "all_floor_layouts": {
-                str(fn): rooms for fn, rooms in all_floor_layouts.items()
+                str(fn): rooms for fn, rooms in final_floor_layouts.items()
             },
 
             # Feature A

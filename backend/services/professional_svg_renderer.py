@@ -47,6 +47,29 @@ INK_COLOR = "#000000"      # Professional Black (Blueprint Ink)
 DIM_INK_COLOR = "#334155"  # Desaturated gray for secondary symbols
 ROOM_FILL = "#FFFFFF"      # Pure white interiors for blueprints
 
+# Room fill colors (used by render_room_fills for colored mode)
+ROOM_COLORS = {
+    'living':         '#FFF8F0',
+    'dining':         '#FFF8F0',
+    'bedroom':        '#F0F4FF',
+    'master_bedroom': '#F0F4FF',
+    'bathroom':       '#F0F8FF',
+    'kitchen':        '#FFFFF0',
+    'pooja':          '#FFF5E6',
+    'study':          '#F5F0FF',
+    'garage':         '#F5F5F5',
+    'entrance':       '#F8F8F0',
+    'foyer':          '#F8F8F0',
+    'hallway':        '#F5F5F5',
+    'passage':        '#F5F5F5',
+    'staircase':      '#F0F0F0',
+    'lift':           '#F0F0F0',
+    'verandah':       '#F0FAF0',
+    'balcony':        '#F0FAF0',
+    'open_terrace':   '#F0FAF0',
+    'car_parking':    '#F5F5F5',
+}
+
 # Floor material patterns mapped to room types
 ROOM_FLOOR_MATERIALS = {
     'living':         'marble',
@@ -840,6 +863,9 @@ def render_wall_boundary_polygon(wall_boundary, scale, offset_x, offset_y, dwg, 
 
 
 def render_room_polygons(placed_rooms, scale, offset_x, offset_y, dwg, clip_union=None):
+    # Sort: annotation rooms (terrace) rendered first, solid rooms on top
+    placed_rooms = sorted(placed_rooms, key=lambda r: (0 if r.get('is_annotation') else 1))
+
     """
     **Draft Layer 2 - Room dividers & Flooring** (Architectural v4.0).
     Draws each room with white fill and black ink strokes.
@@ -1383,9 +1409,18 @@ def render_room_labels(placed_rooms, scale, offset_x, offset_y, dwg,
             name_size_str = f"{current_font_px}px"
             dim_size_str = f"{max(5.5, current_font_px - 1)}px"
             name_bbox = _get_bbox(name_x, name_y, display_name, current_font_px)
+
+            def _fmt_dim(val_ft: float) -> str:
+                ft = int(val_ft)
+                inches = int(round((val_ft - ft) * 12))
+                if inches == 12:
+                    ft += 1; inches = 0
+                return f"{ft}'-{inches:02d}\""
             
-            w_ft, h_ft = int(room['width']), int(room['height'])
-            dim_text = f"{w_ft}'{int(round((room['width']-w_ft)*12))}\"x{h_ft}'{int(round((room['height']-h_ft)*12))}\""
+            display_w = max(0.1, room['width'] - 0.5)
+            display_h = max(0.1, room['height'] - 0.5)
+            dim_text = f"{_fmt_dim(display_w)} × {_fmt_dim(display_h)}"
+            
             dim_y = name_y + current_font_px + 2
             dim_bbox = _get_bbox(name_x, dim_y, dim_text, max(5.5, current_font_px - 1))
 
@@ -1406,15 +1441,17 @@ def render_room_labels(placed_rooms, scale, offset_x, offset_y, dwg,
                     name_bbox = _get_bbox(name_x, name_y, display_name, current_font_px)
                     if _is_overlapping(name_bbox): continue
             
-            dwg.add(dwg.text(display_name, insert=(name_x, name_y), text_anchor="middle",
-                             font_size=name_size_str, font_family=font_main, font_weight="700",
-                             fill=text_color, letter_spacing="-0.2px"))
+            # Add room name label
+            dwg.add(dwg.text(display_name.upper(), insert=(name_x, name_y), text_anchor="middle",
+                             font_size=name_size_str, font_family="Arial, sans-serif", font_weight="700",
+                             fill="#000000", letter_spacing="0.5px"))
             placed_text_boxes.append(name_bbox)
             
             if show_secondary:
+                # Add room dimension label
                 dwg.add(dwg.text(dim_text, insert=(name_x, dim_y), text_anchor="middle",
-                                 font_size=dim_size_str, font_family="JetBrains Mono, monospace",
-                                 fill=dim_color))
+                                 font_size=dim_size_str, font_family="Courier New, monospace",
+                                 fill="#444444", font_weight="400"))
                 placed_text_boxes.append(dim_bbox)
             break
 
@@ -2416,6 +2453,16 @@ def render_blueprint_professional(
             sc['y'] = round(col['y'] - min_y, 4)
             shifted_columns.append(sc)
 
+    # 2b. Calculate column union for geometry clipping/notching
+    column_union = None
+    if shifted_columns:
+        col_polys = []
+        for col in shifted_columns:
+            cw = col.get('width', 0.75)
+            ch = col.get('height', 1.0)
+            col_polys.append(shapely_box(col['x'], col['y'], col['x'] + cw, col['y'] + ch))
+        column_union = unary_union(col_polys)
+
     # 3. Calculate Canvas size based on ACTUAL plan extents plus fixed margins
     plan_width_px = plan_width_ft * SCALE
     plan_height_px = plan_height_ft * SCALE
@@ -2532,7 +2579,7 @@ def render_blueprint_professional(
     draw_site_context(shifted_rooms, plan_width_ft, plan_height_ft, SCALE, offset_x, offset_y, dwg, building_program)
     
     # ── LAYER 1: ROOM POLYGONS (Professional Blueprint Standard) ────
-    render_room_polygons(shifted_rooms, SCALE, offset_x, offset_y, dwg)
+    render_room_polygons(shifted_rooms, SCALE, offset_x, offset_y, dwg, clip_union=column_union)
     
     # ── GENERATE CLIP PATH FOR FIXTURES & FURNITURE ──────────
     rooms_clip = dwg.clipPath(id="rooms_clip")
@@ -2595,19 +2642,34 @@ def render_blueprint_professional(
 
 
 def render_structural_columns(columns, scale, offset_x, offset_y, dwg):
-
-
-
-    """Renders structural columns as solid black rectangles (CAD standard)."""
+    """Renders structural columns as solid black cross-hatched CAD symbols."""
     for col in columns:
-        cx = offset_x + col['x'] * scale
-        cy = offset_y + col['y'] * scale
+        # Column origin: col dict stores top-left corner x,y
+        px = offset_x + col['x'] * scale
+        py = offset_y + col['y'] * scale
         cw = col.get('width', 0.75) * scale
         ch = col.get('height', 1.0) * scale
-        
+
+        # 1. Solid black filled rectangle (CAD standard for RCC column section)
         dwg.add(dwg.rect(
-            insert=(cx, cy), size=(cw, ch),
-            fill='#64748B', stroke='#000000', stroke_width=0.7, rx=1
+            insert=(px, py), size=(cw, ch),
+            fill='#000000',
+            stroke='#000000',
+            stroke_width=0.5,
+            rx=0
+        ))
+
+        # 2. White cross-hatch overlay (2 diagonal lines inside the column box)
+        #    This is the standard architectural convention for a concrete column
+        dwg.add(dwg.line(
+            start=(px + 1, py + 1),
+            end=(px + cw - 1, py + ch - 1),
+            stroke='#FFFFFF', stroke_width=0.6
+        ))
+        dwg.add(dwg.line(
+            start=(px + cw - 1, py + 1),
+            end=(px + 1, py + ch - 1),
+            stroke='#FFFFFF', stroke_width=0.6
         ))
 
 

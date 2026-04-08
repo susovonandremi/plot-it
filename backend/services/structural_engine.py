@@ -55,10 +55,11 @@ class ColumnPoint:
         }
 
     def __eq__(self, other):
-        return abs(self.x - other.x) < 1.0 and abs(self.y - other.y) < 1.0
+        return abs(self.x - other.x) < 0.5 and abs(self.y - other.y) < 0.5
 
     def __hash__(self):
-        return hash((round(self.x), round(self.y)))
+        # Round to nearest 0.5ft grid (matches CP-SAT SCALE=2)
+        return hash((round(self.x * 2) / 2, round(self.y * 2) / 2))
 
 
 class BeamSegment:
@@ -263,10 +264,21 @@ class StructuralEngine:
         """
         columns: Set[ColumnPoint] = set()
 
-        # Strategy 1: Plot corners
-        for cx, cy in [(0, 0), (self.plot_width, 0),
-                       (0, self.plot_height), (self.plot_width, self.plot_height)]:
-            columns.add(ColumnPoint(cx, cy, reason="corner"))
+        # Strategy 1: Building envelope corners (derived from actual room footprint)
+        bld_min_x, bld_min_y, bld_max_x, bld_max_y = 0, 0, self.plot_width, self.plot_height
+        if placed_rooms:
+            bld_min_x = min(r.get('x', 0) for r in placed_rooms)
+            bld_min_y = min(r.get('y', 0) for r in placed_rooms)
+            bld_max_x = max(r.get('x', 0) + r.get('width', 0) for r in placed_rooms)
+            bld_max_y = max(r.get('y', 0) + r.get('height', 0) for r in placed_rooms)
+
+            for cx, cy in [
+                (bld_min_x, bld_min_y),
+                (bld_max_x, bld_min_y),
+                (bld_min_x, bld_max_y),
+                (bld_max_x, bld_max_y),
+            ]:
+                columns.add(ColumnPoint(cx, cy, reason="corner"))
 
         # Strategy 2: Room corners that are structural junctions
         # A junction is a point where 2+ room corners meet
@@ -293,27 +305,34 @@ class StructuralEngine:
                 columns.add(ColumnPoint(float(cx), float(cy), reason="junction"))
 
         # Strategy 3: Regular grid columns (fill gaps)
-        def _is_on_room_boundary(cx: float, cy: float, placed_rooms: list, tol: float = 1.0) -> bool:
-            """Return True if (cx,cy) is near a room corner or shared wall, False if interior."""
+        def _is_on_room_boundary(cx: float, cy: float, placed_rooms: list, tol: float = 0.75) -> bool:
+            """Return True if (cx,cy) is on or very near a room boundary, not floating or interior."""
             for room in placed_rooms:
                 rx, ry = room.get('x', 0), room.get('y', 0)
                 rw, rh = room.get('width', 0), room.get('height', 0)
-                # Check if point is strictly inside room (not on boundary)
-                if (rx + tol < cx < rx + rw - tol) and (ry + tol < cy < ry + rh - tol):
-                    return False  # Deep interior of a single room
-            return True
+                
+                # Check if point is near vertical walls
+                if (ry - tol <= cy <= ry + rh + tol):
+                    if abs(cx - rx) <= tol or abs(cx - (rx + rw)) <= tol:
+                        return True
+                
+                # Check if point is near horizontal walls
+                if (rx - tol <= cx <= rx + rw + tol):
+                    if abs(cy - ry) <= tol or abs(cy - (ry + rh)) <= tol:
+                        return True
+            return False
 
-        x = STANDARD_SPAN_FT
-        while x < self.plot_width:
-            y = STANDARD_SPAN_FT
-            while y < self.plot_height:
+        x = bld_min_x + STANDARD_SPAN_FT
+        while x < bld_max_x:
+            y = bld_min_y + STANDARD_SPAN_FT
+            while y < bld_max_y:
                 candidate = ColumnPoint(x, y, reason="grid")
                 # Only add if not already covered by a nearby column
                 if not any(abs(c.x - x) < STANDARD_SPAN_FT * 0.4 and
                            abs(c.y - y) < STANDARD_SPAN_FT * 0.4
                            for c in columns):
-                    # Ensure grid columns land on walls, not floating in open space
-                    if _is_on_room_boundary(x, y, placed_rooms, tol=2.0):
+                    # Ensure grid columns land on actual walls (within 9 inches)
+                    if _is_on_room_boundary(x, y, placed_rooms, tol=0.75):
                         columns.add(candidate)
                 y += STANDARD_SPAN_FT
             x += STANDARD_SPAN_FT

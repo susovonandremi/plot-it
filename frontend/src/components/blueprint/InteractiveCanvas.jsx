@@ -167,12 +167,16 @@ export default function InteractiveCanvas({
                </div>
 
                <TransformWrapper
-                    initialScale={1}
-                    minScale={0.1}
-                    maxScale={8}
+                    initialScale={0.85}
+                    minScale={0.05}
+                    maxScale={10}
                     centerOnInit={true}
                     limitToBounds={false}
-                    wheel={{ step: 0.1 }}
+                    wheel={{ step: 0.08 }}
+                    onInit={(ref) => {
+                        // Auto-fit to viewport on load
+                        setTimeout(() => ref.zoomToElement('blueprint-svg-wrapper', undefined, 200), 150);
+                    }}
                >
                     {({ zoomIn, zoomOut, resetTransform }) => (
                          <>
@@ -213,26 +217,36 @@ export default function InteractiveCanvas({
                                )}
 
                               <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">
-                                   <div
-                                        id="blueprint-svg-wrapper"
-                                        ref={svgContainerRef}
-                                        className="transition-opacity duration-500 flex items-center justify-center p-4"
-                                        dangerouslySetInnerHTML={{ __html: blueprintSvg }}
-                                        style={{
-                                             width: '100%',
-                                             height: '100%',
-                                             maxWidth: '100%',
-                                             maxHeight: '100%',
-                                        }}
-                                   />
-                              </TransformComponent>
-                         </>
-                    )}
-               </TransformWrapper>
+    <div
+        id="blueprint-svg-wrapper"
+        ref={svgContainerRef}
+        className="transition-opacity duration-500"
+        dangerouslySetInnerHTML={{ __html: blueprintSvg }}
+        style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+            height: '100%',
+            padding: '16px',
+            overflow: 'visible',
+        }}
+    />
+</TransformComponent>
+</>
+)}
+</TransformWrapper>
 
-               {/* CSS Injection to control data-layer visibility and SVG responsiveness */}
-               <style>{`
-                    #blueprint-svg-wrapper svg { width: 100% !important; height: 100% !important; max-width: 100%; max-height: 100%; }
+{/* CSS Injection to control data-layer visibility and SVG responsiveness */}
+<style>{`
+#blueprint-svg-wrapper svg {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100%;
+    max-height: 100%;
+    margin: auto;
+}
 
                     ${!showFurniture ? '#blueprint-svg-wrapper [data-layer="furniture"], #blueprint-svg-wrapper g[id*="furniture"], #blueprint-svg-wrapper path[class*="furniture"] { display: none !important; }' : ''}
                     ${!showStructure ? '#blueprint-svg-wrapper [data-layer="structural"] { display: none !important; }' : ''}
