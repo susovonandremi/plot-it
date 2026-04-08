@@ -486,8 +486,6 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
                     placement_data=floor_rooms_list,
                     plot_width=plot_width,
                     plot_height=plot_depth,
-                    scale=SCALE,
-                    floor_label=final_labels.get(fn, f"FLOOR {fn}"),
                     vastu_score=vastu_results,
                     user_tier=request_data.user_tier,
                     original_unit_system=request_data.original_unit_system,
@@ -556,7 +554,17 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
             diff_result = diff.to_dict()
             print(f"🔀 Diff: {diff_result['total_changes']} changes — {diff_result['summary']}")
 
+        # ── v3.0: VASTU HEATMAP & PER-ROOM SCORES ─────────────────────────────
+        room_scores = calculate_room_vastu_scores(placed_rooms, vastu_assignments)
+        vastu_heatmap_data = generate_vastu_heatmap(
+            placed_rooms, room_scores, 
+            plot_width=plot_width, plot_height=plot_depth
+        )
+
+        alternative_svg = None # Placeholder for future v4.0 multi-solver comparisons
+
         # ── RESPONSE ──────────────────────────────────────────────────────────
+
         response_data = {
             "svg": svg_blueprint,
             "seed": layout_seed,
