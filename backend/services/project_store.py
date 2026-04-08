@@ -28,6 +28,9 @@ async def save_project(project: Dict[str, Any]) -> str:
     name = project.get("name", f"Project {project_id[:8]}")
     prompt = project.get("prompt", "")
     svg = project.get("svg", "")
+    if isinstance(svg, dict):
+        svg = json.dumps(svg)
+        
     scores = json.dumps(project.get("scores", {}))
     created_at = datetime.utcnow().isoformat()
 

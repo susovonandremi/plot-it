@@ -211,6 +211,25 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
                 detail=f"Layout too large ({total_min_required} sqft min) for plot ({request_data.plot_size_sqft} sqft)."
             )
 
+        # ── INITIALIZE OPTIONAL RESPONSE DATA ──
+        # Ensures no NameError if a specific analyzer fails
+        structural_data = None
+        circulation_data = {
+            "efficiency_score": 0, "corridors": [], "total_corridor_area": 0, "notes": "Engine disabled"
+        }
+        proportion_data = {
+            "proportion_score": 0.0, "errors": 0, "warnings": 0, "flagged": []
+        }
+        blueprint_score = {
+            "overall": 0.0, "grade": "N/A", "label": "Analysis Pending", "axes": {}
+        }
+        environment_data = {
+            "overall_sun_score": 0, "overall_vent_score": 0, "solar_points": [], "vent_points": []
+        }
+        vastu_heatmap_data = {"cells": [], "resolution_ft": 4, "avg_score": 0}
+        room_scores = {}
+        iso_svg = None
+
         # ── SITE CONTEXT ENGINE ────────────────────────────────────────────────
         # Calculate buildable envelope BEFORE layout begins
         FT_TO_M = 0.3048
@@ -473,13 +492,17 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
         # ── PER-FLOOR RENDERING ──
         for fn, floor_rooms_list in final_floor_layouts.items():
             # Compute structural columns per-floor for accuracy
-            floor_structural_data = struct_engine.find_column_positions(
-                floor_rooms_list, norm_btype, total_floors
-            )
-            
-            # Track principal structural data for top-level response
-            if fn == 1 or (fn == 0 and structural_data is None):
-                structural_data = floor_structural_data
+            try:
+                floor_structural_analysis = struct_engine.analyze(floor_rooms_list)
+                
+                # Track principal structural data for top-level response
+                if fn == 1 or (fn == 0 and structural_data is None):
+                    structural_data = floor_structural_analysis
+            except Exception as struct_err:
+                print(f"⚠️ Structural analysis failed for floor {fn}: {struct_err}")
+                floor_structural_analysis = {
+                    "columns": [], "beams": [], "wall_boundary": {"geometry": None}
+                }
 
             try:
                 floor_svg = render_blueprint_professional(
@@ -489,7 +512,7 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
                     vastu_score=vastu_results,
                     user_tier=request_data.user_tier,
                     original_unit_system=request_data.original_unit_system,
-                    heavy_elements=floor_structural_data,
+                    heavy_elements=floor_structural_analysis,
                     building_program=program,
                     floor_number=fn,
                     shape_config=shape_config,
@@ -498,8 +521,8 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
                 )
                 final_floor_svgs[fn] = floor_svg
             except Exception as svg_err:
-                print(f"⚠️ SVG render failed for floor {fn}: {svg_err}")
-                final_floor_svgs[fn] = ""
+                print(f"⚠️ SVG Render error floor {fn}: {svg_err}")
+                final_floor_svgs[fn] = f"<svg viewBox='0 0 100 100'><text x='5' y='50' font-size='5'>Error rendering floor {fn}</text></svg>"
 
         # Primary SVG (use 1st floor if multi-story, else ground)
         if total_floors > 0:
@@ -510,19 +533,25 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
         print(f"📐 Renderer: {len(final_floor_svgs)} floor SVGs generated")
 
         # ── v3.0: PROPORTION VALIDATOR ─────────────────────────────────────────
-        proportion_data = validate_proportions(placed_rooms)
-        print(f"📏 Proportions: score={proportion_data['proportion_score']}, "
-              f"errors={proportion_data['errors']}, warnings={proportion_data['warnings']}")
+        try:
+            proportion_data = validate_proportions(placed_rooms)
+            print(f"📏 Proportions: score={proportion_data['proportion_score']}, "
+                  f"errors={proportion_data['errors']}, warnings={proportion_data['warnings']}")
+        except Exception as prop_err:
+            print(f"⚠️ Proportion validation skipped: {prop_err}")
 
         # ── v3.0: BLUEPRINT SCORER ─────────────────────────────────────────────
-        blueprint_score = score_blueprint(
-            placed_rooms, plot_width, plot_depth,
-            vastu_score=vastu_results,
-            accessibility_report=accessibility_report,
-            proportion_report=proportion_data,
-        )
-        print(f"🏆 Blueprint Score: {blueprint_score['overall']}/100 ({blueprint_score['grade']})"
-              f" — {blueprint_score['label']}")
+        try:
+            blueprint_score = score_blueprint(
+                placed_rooms, plot_width, plot_depth,
+                vastu_score=vastu_results,
+                accessibility_report=accessibility_report,
+                proportion_report=proportion_data,
+            )
+            print(f"🏆 Blueprint Score: {blueprint_score['overall']}/100 ({blueprint_score['grade']})"
+                  f" — {blueprint_score['label']}")
+        except Exception as score_err:
+            print(f"⚠️ Blueprint scoring failed: {score_err}")
 
         # ── v3.0: SOLAR & WIND ANALYSIS ────────────────────────────────────────
         environment_data = {}
@@ -645,9 +674,15 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
         print(f"❌ Generation error: {e}")
-        logger.error(f"Blueprint generation failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"TRACEBACK:\n{error_trace}")
+        
+        # Log to proper logger
+        logger.error(f"Generation failure: {str(e)}\n{error_trace}")
+        
+        raise HTTPException(status_code=500, detail=f"Server error during generation: {str(e)}")
     finally:
         pass
 
