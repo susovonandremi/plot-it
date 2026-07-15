@@ -26,3 +26,27 @@ Thumbs.db
 
 # Debugging
 debug/
+
+# Databases
+*.db
+*.sqlite*
+
+# Environment files
+.env
+frontend/.env
+
+# Temporary / Scratch dirs
+tmp/
+scratch/
+backend/scratch/
+
+# Archives
+*.zip
+
+# Logs and outputs
+*.log
+*_output.txt
+test_core_out.txt
+test_report.txt
+test_vertical_output.txt
+vert.txt
