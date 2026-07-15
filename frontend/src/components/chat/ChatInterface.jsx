@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConsultationModal from '../ConsultationModal';
 import { Bot, AlertTriangle, Send, Home, Compass } from 'lucide-react';
+import { useConsultationStore } from '../../store/consultationStore';
 
 const stageMap = {
      parsing: "Reading your prompt",
@@ -20,6 +21,7 @@ const stageMap = {
 };
 
 export default function ChatInterface({ history, onSend, isLoading, isGenerating, generationProgress, pendingDraft, onConsultationGenerate }) {
+     const isConsultationActive = useConsultationStore(state => state.isConsultationActive);
      const [input, setInput] = useState('');
      const [isSubmitting, setIsSubmitting] = useState(false);
      const scrollRef = useRef(null);
@@ -61,7 +63,7 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
           }
      };
 
-     const isSendDisabled = !input.trim() || isLoading || isSubmitting;
+     const isSendDisabled = !input.trim() || isLoading || isSubmitting || isConsultationActive;
 
      return (
           <>
@@ -137,9 +139,31 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
                                                   <AlertTriangle size={14} className="text-error" />
                                                   <span className="text-[10px] text-error font-label-caps uppercase">System Error</span>
                                              </div>
-                                             <div className="border border-error/50 bg-error/10 rounded-r-lg rounded-bl-lg p-3 max-w-[85%] shadow-[inset_0_0_10px_rgba(255,180,171,0.05)]">
-                                                  <p className="text-body-sm text-error">{msg.content}</p>
-                                             </div>
+                                              <div className="border border-error/50 bg-error/10 rounded-r-lg rounded-bl-lg p-3 max-w-[85%] shadow-[inset_0_0_10px_rgba(255,180,171,0.05)]">
+                                                   <p className="text-body-sm text-error">{msg.content}</p>
+                                                   {msg.content.includes("configure") && (
+                                                        <button 
+                                                             onClick={() => {
+                                                                  const defaultQuestions = [
+                                                                       { id: "plot_dimensions", question: "What are your plot dimensions? (e.g., 30x40, 40x60)", options: ["30x40", "40x60", "20x30", "Other"] },
+                                                                       { id: "bedrooms", question: "How many bedrooms do you need?", options: ["1 BHK", "2 BHK", "3 BHK", "4 BHK"] },
+                                                                       { id: "floors", question: "How many floors?", options: ["1 Floor (Ground only)", "2 Floors (G+1)", "3 Floors (G+2)"] },
+                                                                       { id: "entry", question: "Which side is the entrance road?", options: ["East", "West", "North", "South"] }
+                                                                  ];
+                                                                  useConsultationStore.getState().startConsultation(defaultQuestions, {
+                                                                       plot_size_sqft: 1200,
+                                                                       plot_width_ft: 30,
+                                                                       plot_depth_ft: 40,
+                                                                       entry_direction: "N",
+                                                                       rooms: []
+                                                                  });
+                                                             }}
+                                                             className="mt-3 px-3 py-1.5 bg-error hover:bg-red-700 text-white font-bold rounded text-xs transition-colors cursor-pointer block"
+                                                        >
+                                                             Start Manual Configuration
+                                                        </button>
+                                                   )}
+                                              </div>
                                         </div>
                                    ) : (
                                         <div className="flex flex-col items-start gap-2 w-full">
@@ -202,8 +226,9 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
                                    value={input}
                                    onChange={(e) => setInput(e.target.value)}
                                    onKeyDown={handleKeyDown}
-                                   placeholder="Command PlotIt..."
-                                   className="w-full bg-transparent text-body-sm text-on-surface placeholder-on-surface-variant/50 border-none focus:ring-0 resize-none p-3 max-h-32 outline-none"
+                                   disabled={isLoading || isSubmitting || isConsultationActive}
+                                   placeholder={isConsultationActive ? "Consultation active..." : "Command PlotIt..."}
+                                   className="w-full bg-transparent text-body-sm text-on-surface placeholder-on-surface-variant/50 border-none focus:ring-0 resize-none p-3 max-h-32 outline-none disabled:opacity-50"
                                    rows={2}
                               />
                               <div className="p-2">

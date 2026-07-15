@@ -38,11 +38,17 @@ export default function Home() {
 
      // Ref to hold the parsed plotData from the initial prompt (before consultation)
      const parsedPlotDataRef = React.useRef(null);
+     const activeStreamRef = React.useRef(null);
 
      // Effects: Check for saved drafts on mount
      useEffect(() => {
           const draft = restoreDraft();
           if (draft) setPendingDraft(draft);
+          return () => {
+               if (activeStreamRef.current) {
+                    activeStreamRef.current();
+               }
+          };
      }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
      // ─── Core generation handler ────────────────────────────────────────
@@ -58,7 +64,7 @@ export default function Home() {
                 : (plotInfo.plot_size_sqft || 1200);
 
            try {
-                const data = await generateBlueprintStream({
+                const stream = generateBlueprintStream({
                      plot_size_sqft: plot_size,
                      floors: plotInfo.floors || 1,
                      rooms: rooms,
@@ -71,7 +77,11 @@ export default function Home() {
                      }
                 });
                 
+                activeStreamRef.current = stream.abort;
+                
+                const data = await stream.promise;
                 setBlueprintData(data);
+                setGenerationProgress({ progress: 100, stage: 'complete' });
                 const defaultFloor = (data.floor_plans && data.floor_plans["1"]) || (data.floor_svgs && data.floor_svgs["1"]) ? "1" : "0";
                 setActiveFloor(defaultFloor);
                 setChatHistory(prev => [...prev, { role: 'assistant', content: `Done! Here is your ${plot_size} sqft plan.` }]);
@@ -93,9 +103,10 @@ export default function Home() {
                      setChatHistory(prev => [...prev, { role: 'assistant', content: `Done! (via REST) Here is your ${plot_size} sqft plan.` }]);
                 } catch (fallbackErr) {
                      console.error("Critical: REST fallback failed too:", fallbackErr);
-                     setChatHistory(prev => [...prev, { role: 'error', content: `Generation failed: ${fallbackErr.message || 'Server error'}` }]);
+                     setChatHistory(prev => [...prev, { role: 'error', content: `Critical: ${fallbackErr.message || 'Server error'}` }]);
                 }
            } finally {
+                activeStreamRef.current = null;
                 setIsGenerating(false);
            }
      }, [chatHistory]);
@@ -134,7 +145,10 @@ export default function Home() {
 
           } catch (err) {
                console.error(err);
-               setChatHistory(prev => [...prev, { role: 'error', content: "Sorry, I couldn't process that. Please try again." }]);
+               setChatHistory(prev => [
+                    ...prev, 
+                    { role: 'error', content: "Sorry, I couldn't parse your requirements. If this continues, you can manually configure your plot and room details." }
+               ]);
           } finally {
                setIsLoading(false);
           }
@@ -165,8 +179,12 @@ export default function Home() {
      }, [handleGenerationResponse, resetConsultation, plotData, setConsultationActive]);
 
      const handleReset = () => {
+          if (activeStreamRef.current) {
+               activeStreamRef.current();
+          }
           setBlueprintData(null);
           setChatHistory([]);
+          setActiveFloor("0");
           resetConsultation();
           parsedPlotDataRef.current = null;
      };
@@ -219,25 +237,25 @@ export default function Home() {
                          </div>
                     }
                     main={
-                         <ErrorBoundary>
+                         <>
                               {/* Top App Bar (Overlapping Canvas) */}
                               <header className="absolute top-0 right-0 left-0 h-16 z-40 flex justify-between items-center px-8 bg-surface-container/85 backdrop-blur-md border-b border-outline-variant/30 shadow-sm pointer-events-none">
                                    {/* Left Side: Nav Links */}
                                    <div className="flex items-center gap-6 pointer-events-auto">
-                                        <h2 className="text-body-lg font-bold text-primary border-r border-outline-variant/30 pr-6 uppercase tracking-wider font-mono drop-shadow-[0_0_8px_rgba(138,235,255,0.4)]">PlotIt CAD Studio</h2>
+                                        <h2 className="text-body-lg font-bold text-primary border-r border-outline-variant/30 pr-6 uppercase tracking-wider font-mono drop-shadow-[0_0_8px_rgba(138,235,255,0.4)] ml-10 md:ml-0">PlotIt CAD Studio</h2>
                                         <nav className="flex gap-6">
-                                             <div className="flex flex-col items-center cursor-pointer group pt-1">
+                                             <button className="flex flex-col items-center cursor-pointer group pt-1 bg-transparent border-none outline-none">
                                                   <span className="text-primary text-body-sm font-semibold tracking-wide transition-colors">Viewer</span>
                                                   <div className="w-full h-0.5 bg-primary mt-1 shadow-[0_0_5px_rgba(138,235,255,0.6)]"></div>
-                                             </div>
-                                             <div className="flex flex-col items-center cursor-pointer group pt-1">
+                                             </button>
+                                             <button className="flex flex-col items-center cursor-pointer group pt-1 bg-transparent border-none outline-none">
                                                   <span className="text-on-surface-variant text-body-sm font-medium tracking-wide group-hover:text-on-surface transition-colors">Compare</span>
                                                   <div className="w-0 h-0.5 bg-on-surface-variant mt-1 group-hover:w-full transition-all duration-300"></div>
-                                             </div>
-                                             <div className="flex flex-col items-center cursor-pointer group pt-1">
+                                             </button>
+                                             <button className="flex flex-col items-center cursor-pointer group pt-1 bg-transparent border-none outline-none">
                                                   <span className="text-on-surface-variant text-body-sm font-medium tracking-wide group-hover:text-on-surface transition-colors">Vastu</span>
                                                   <div className="w-0 h-0.5 bg-on-surface-variant mt-1 group-hover:w-full transition-all duration-300"></div>
-                                             </div>
+                                             </button>
                                         </nav>
                                    </div>
                                    {/* Right Side: Actions */}
@@ -269,25 +287,27 @@ export default function Home() {
                                         />
                                    }
                                    canvas={
-                                        <InteractiveCanvas
-                                             blueprintSvg={
-                                                  blueprintData?.floor_plans?.[activeFloor] || 
-                                                  blueprintData?.floor_svgs?.[activeFloor] || 
-                                                  blueprintData?.floor_plan || 
-                                                  blueprintData?.svg
-                                             }
-                                             floorSvgs={blueprintData?.floor_plans || blueprintData?.floor_svgs}
-                                             floorLabels={blueprintData?.floor_labels}
-                                             activeFloor={activeFloor}
-                                             onFloorChange={setActiveFloor}
-                                             isIsoMode={false}
-                                             isGenerating={isGenerating}
-                                             generationProgress={generationProgress}
-                                             blueprintScore={blueprintData?.blueprint_score}
-                                        />
+                                        <ErrorBoundary>
+                                             <InteractiveCanvas
+                                                  blueprintSvg={
+                                                       blueprintData?.floor_plans?.[activeFloor] || 
+                                                       blueprintData?.floor_svgs?.[activeFloor] || 
+                                                       blueprintData?.floor_plan || 
+                                                       blueprintData?.svg
+                                                  }
+                                                  floorSvgs={blueprintData?.floor_plans || blueprintData?.floor_svgs}
+                                                  floorLabels={blueprintData?.floor_labels}
+                                                  activeFloor={activeFloor}
+                                                  onFloorChange={setActiveFloor}
+                                                  isIsoMode={false}
+                                                  isGenerating={isGenerating}
+                                                  generationProgress={generationProgress}
+                                                  blueprintScore={blueprintData?.blueprint_score}
+                                             />
+                                        </ErrorBoundary>
                                    }
                               />
-                         </ErrorBoundary>
+                         </>
                     }
                />
 

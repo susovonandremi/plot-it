@@ -2,8 +2,17 @@ import React, { useState, useRef } from 'react';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { 
      ZoomIn, ZoomOut, RotateCcw, Layers, Download, Image as ImageIcon, 
-     FileText, Code, ChevronDown, Hammer, Ruler, Flame, CheckCircle, AlertTriangle 
+     FileText, Code, ChevronDown, Hammer, Ruler, Flame, CheckCircle, AlertTriangle,
+     Bot
 } from 'lucide-react';
+
+const sanitizeSvg = (rawSvg) => {
+     if (typeof rawSvg !== 'string') return '';
+     let clean = rawSvg.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+     clean = clean.replace(/on\w+\s*=\s*(['"][^'"]*['"]|[^\s>]+)/gi, '');
+     clean = clean.replace(/href\s*=\s*['"]javascript:[^'"]*['"]/gi, '');
+     return clean;
+};
 import { jsPDF } from 'jspdf';
 import BlueprintRenderer from './BlueprintRenderer';
 
@@ -360,7 +369,7 @@ export default function InteractiveCanvas({
                                         ) : (
                                              <div 
                                                   className="w-full h-full flex items-center justify-center"
-                                                  dangerouslySetInnerHTML={{ __html: blueprintSvg }} 
+                                                  dangerouslySetInnerHTML={{ __html: sanitizeSvg(blueprintSvg) }} 
                                              />
                                         )}
                                    </div>

@@ -61,7 +61,7 @@ export const useConsultationStore = create((set, get) => ({
                }
 
                set({
-                    isConsultationActive: true,
+                    isConsultationActive: false,
                     ...(draft.state || draft),
                });
                return draft.state || draft;

@@ -713,7 +713,37 @@ class BuildingProgram:
             rooms.append({'type': 'passage', 'count': 1, 'area_hint': 40})
             rooms.append({'type': 'staircase', 'count': 1, 'area_hint': 50})
                 
-        return rooms
+        # Room type normalizer for ID assignment
+        def _normalize_type(rtype: str) -> str:
+            t = rtype.lower().strip().replace(' ', '_').replace('_room', '')
+            aliases = {
+                'bed_room': 'bedroom', 'bath_room': 'bathroom',
+                'living_room': 'living', 'dining_room': 'dining',
+                'wash_room': 'bathroom', 'wc': 'toilet',
+                'stairs': 'staircase', 'corridor': 'passage',
+                'hall': 'living', 'elevator': 'lift',
+                'porch': 'verandah', 'prayer': 'pooja', 'mandir': 'pooja',
+            }
+            return aliases.get(t, t)
+
+        # Expand room count > 1 and assign stable lowercased unique IDs
+        expanded_rooms = []
+        type_counters = {}
+        for r in rooms:
+            count = int(r.get('count', 1) or 1)
+            for i in range(count):
+                r_copy = r.copy()
+                r_copy['count'] = 1
+                
+                # Assign stable ID
+                nt = _normalize_type(r_copy['type'])
+                idx = type_counters.get(nt, 0)
+                r_copy['id'] = f"{nt}_{idx}"
+                type_counters[nt] = idx + 1
+                
+                expanded_rooms.append(r_copy)
+                
+        return expanded_rooms
     
     def get_enriched_rooms(self) -> List[Dict[str, Any]]:
         """

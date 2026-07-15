@@ -127,7 +127,7 @@ async def list_projects(owner_id: str = "anonymous", limit: int = 20) -> List[Di
         await conn.close()
         projects = []
         for row in rows:
-            proj = dict(row)
+            proj = dict(row.items())
             if proj.get("scores"):
                 proj["scores"] = json.loads(proj["scores"])
             projects.append(proj)
@@ -156,7 +156,7 @@ async def get_project(project_id: str) -> Optional[Dict[str, Any]]:
         row = await conn.fetchrow("SELECT * FROM projects WHERE id = $1", project_id)
         await conn.close()
         if row:
-            proj = dict(row)
+            proj = dict(row.items())
             if proj.get("scores"):
                 proj["scores"] = json.loads(proj["scores"])
             return proj

@@ -199,18 +199,6 @@ async def generate_blueprint_endpoint(
         vastu_assignments = assign_vastu_zones(vastu_rooms)
         vastu_results = calculate_vastu_score(vastu_assignments)
 
-        # ── FEASIBILITY CHECK ─────────────────────────────────────────────────
-        MIN_ESTIMATES = {"BEDROOM": 100, "BATHROOM": 35, "KITCHEN": 80, "DINING": 80, "LIVING": 120}
-        total_min_required = sum(
-            MIN_ESTIMATES.get(r["type"].upper(), 50) * (r.get("count") or 1)
-            for r in enriched_rooms
-        )
-        if total_min_required > request_data.plot_size_sqft * 0.95:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Layout too large ({total_min_required} sqft min) for plot ({request_data.plot_size_sqft} sqft)."
-            )
-
         # ── INITIALIZE OPTIONAL RESPONSE DATA ──
         # Ensures no NameError if a specific analyzer fails
         structural_data = None
@@ -257,6 +245,19 @@ async def generate_blueprint_endpoint(
               f"R={site_context['setbacks']['rear']}m "
               f"L={site_context['setbacks']['left']}m "
               f"R={site_context['setbacks']['right']}m")
+
+        # ── FEASIBILITY CHECK (Buildable Area) ──────────────────────────────
+        MIN_ESTIMATES = {"BEDROOM": 100, "BATHROOM": 35, "KITCHEN": 80, "DINING": 80, "LIVING": 120}
+        total_min_required = sum(
+            MIN_ESTIMATES.get(r["type"].upper(), 50) * (r.get("count") or 1)
+            for r in enriched_rooms
+        )
+        buildable_area_sqft = buildable_width_ft * buildable_depth_ft
+        if total_min_required > buildable_area_sqft * 0.95:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Layout too large ({total_min_required} sqft min) for the buildable plot area ({round(buildable_area_sqft, 1)} sqft after setbacks)."
+            )
 
         # ══════════════════════════════════════════════════════════════════════
         # MULTI-FLOOR SEQUENTIAL PIPELINE
@@ -370,6 +371,7 @@ async def generate_blueprint_endpoint(
                         max_time_seconds=5.0,
                         fixed_positions=fixed_positions, # Enforce stair alignment
                         floor_number=floor_num,
+                        random_seed=layout_seed % (2**31),
                     )
 
                     floor_layout = solver_result['rooms']

@@ -32,7 +32,7 @@ export function wktToSvgPath(wkt) {
   return pathData.trim();
 }
 
-export function RoomLayer({ rooms, unitSystem, visible = true }) {
+export function RoomLayer({ rooms = [], unitSystem, visible = true }) {
   if (!visible) return null;
 
   const ROOM_COLORS = {
@@ -104,7 +104,7 @@ export function WallLayer({ walls, visible = true }) {
   );
 }
 
-export function DoorLayer({ doors, visible = true }) {
+export function DoorLayer({ doors = [], visible = true }) {
   if (!visible) return null;
 
   return (
@@ -123,7 +123,7 @@ export function DoorLayer({ doors, visible = true }) {
   );
 }
 
-export function WindowLayer({ windows, visible = true }) {
+export function WindowLayer({ windows = [], visible = true }) {
   if (!visible) return null;
 
   return (
@@ -141,7 +141,7 @@ export function WindowLayer({ windows, visible = true }) {
   );
 }
 
-export function LabelLayer({ rooms, unitSystem, visible = true }) {
+export function LabelLayer({ rooms = [], unitSystem, visible = true }) {
   if (!visible) return null;
 
   return (
@@ -190,12 +190,14 @@ export function LabelLayer({ rooms, unitSystem, visible = true }) {
 }
 
 export function StructuralLayer({ structural, visible = true }) {
-  if (!visible) return null;
+  if (!visible || !structural) return null;
+  const beams = structural.beams || [];
+  const columns = structural.columns || [];
 
   return (
     <g data-layer="structural" className="layer-structural">
       {/* Connect columns with load-bearing beams */}
-      {structural.beams.map((beam) => (
+      {beams.map((beam) => (
         <line
           key={beam.id}
           x1={ftToPx(beam.x1)}
@@ -210,7 +212,7 @@ export function StructuralLayer({ structural, visible = true }) {
       ))}
       
       {/* Placed Column RCC markers */}
-      {structural.columns.map((col) => (
+      {columns.map((col) => (
         <ColumnSymbol
           key={col.id}
           cx={col.cx}
@@ -224,7 +226,7 @@ export function StructuralLayer({ structural, visible = true }) {
   );
 }
 
-export function FixtureLayer({ fixtures, visible = true }) {
+export function FixtureLayer({ fixtures = [], visible = true }) {
   if (!visible) return null;
 
   return (
@@ -251,7 +253,7 @@ export function FixtureLayer({ fixtures, visible = true }) {
   );
 }
 
-export function FurnitureLayer({ furniture, visible = true }) {
+export function FurnitureLayer({ furniture = [], visible = true }) {
   if (!visible) return null;
 
   return (
@@ -296,7 +298,12 @@ export function FurnitureLayer({ furniture, visible = true }) {
 }
 
 export function DimensionLayer({ dimensionChains, visible = true }) {
-  if (!visible) return null;
+  if (!visible || !dimensionChains) return null;
+
+  const overall_width = dimensionChains.overall_width || { value_ft: 0, label: "" };
+  const overall_depth = dimensionChains.overall_depth || { value_ft: 0, label: "" };
+  const top_facade = dimensionChains.top_facade || [];
+  const left_facade = dimensionChains.left_facade || [];
 
   const tickStyle = { stroke: INK_COLOR, strokeWidth: 0.7 };
 
@@ -304,7 +311,6 @@ export function DimensionLayer({ dimensionChains, visible = true }) {
     <g data-layer="dimensions" className="layer-dimensions">
       {/* 1. Overall plot width at the top facade */}
       {(() => {
-        const { overall_width, overall_depth } = dimensionChains;
         const dimY = PADDING - 40;
         const startX = PADDING;
         const endX = PADDING + overall_width.value_ft * SCALE;
@@ -330,7 +336,6 @@ export function DimensionLayer({ dimensionChains, visible = true }) {
 
       {/* 2. Overall plot depth along the left side */}
       {(() => {
-        const { overall_depth } = dimensionChains;
         const dimX = PADDING - 40;
         const startY = PADDING;
         const endY = PADDING + overall_depth.value_ft * SCALE;
@@ -355,7 +360,7 @@ export function DimensionLayer({ dimensionChains, visible = true }) {
       })()}
 
       {/* 3. Room-by-room top facade dimension segment chains */}
-      {dimensionChains.top_facade.map((seg, idx) => {
+      {top_facade.map((seg, idx) => {
         const sx = ftToPx(seg.start_ft);
         const ex = ftToPx(seg.end_ft);
         const y = PADDING - 20;
@@ -380,7 +385,7 @@ export function DimensionLayer({ dimensionChains, visible = true }) {
       })}
 
       {/* 4. Room-by-room left facade dimension segment chains */}
-      {dimensionChains.left_facade.map((seg, idx) => {
+      {left_facade.map((seg, idx) => {
         const sy = ftToPx(seg.start_ft);
         const ey = ftToPx(seg.end_ft);
         const x = PADDING - 20;
@@ -408,7 +413,7 @@ export function DimensionLayer({ dimensionChains, visible = true }) {
 }
 
 export function AnnotationLayer({ schema, visible = true }) {
-  if (!visible) return null;
+  if (!visible || !schema || !schema.metadata) return null;
 
   const { metadata, site_context } = schema;
   const { plot_width_ft, plot_height_ft, floor_label, vastu_score } = metadata;

@@ -503,8 +503,8 @@ def serialize_floor_plan(
     dimension_chains = DimensionChains(
         top_facade=top_segments,
         left_facade=left_segments,
-        overall_width=DimensionChain(value_ft=plot_width, label=_format_dimension_str(plot_width)),
-        overall_depth=DimensionChain(value_ft=plot_height, label=_format_dimension_str(plot_height))
+        overall_width=DimensionChain(value_ft=plan_width_ft, label=_format_dimension_str(plan_width_ft)),
+        overall_depth=DimensionChain(value_ft=plan_height_ft, label=_format_dimension_str(plan_height_ft))
     )
 
     # Compile the final schema

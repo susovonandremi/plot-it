@@ -58,5 +58,5 @@ def test_schema_serializer_output():
     
     # Assert dimension chains
     dims = schema['dimension_chains']
-    assert dims['overall_width']['value_ft'] == 30.0
-    assert dims['overall_depth']['value_ft'] == 30.0
+    assert dims['overall_width']['value_ft'] == 20.0
+    assert dims['overall_depth']['value_ft'] == 12.0

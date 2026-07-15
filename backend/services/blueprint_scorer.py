@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 def _score_space_efficiency(placed_rooms: List[Dict], plot_area: float) -> float:
     """Score how well the layout uses available space (target: 80-90% utilization)."""
-    total_room_area = sum(r.get('width', 0) * r.get('height', 0) for r in placed_rooms)
+    total_room_area = sum(r.get('width', 0) * r.get('height', 0) for r in placed_rooms if not r.get('is_annotation', False))
     if plot_area <= 0:
         return 50.0
 

@@ -142,7 +142,7 @@ def calculate_vastu_score(assignments: Dict[str, str]) -> Dict[str, Any]:
         
         # Determine normalized type for scoring (first bedroom is Master)
         type_check = base_type
-        if base_type == "BEDROOM" and len(parts) > 1 and parts[1] == "1":
+        if base_type == "BEDROOM" and len(parts) > 1 and parts[1] in ("0", "1"):
             type_check = "MASTER_BEDROOM"
             
         # Check Forbidden

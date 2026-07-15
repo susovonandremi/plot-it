@@ -5,7 +5,10 @@ import uuid
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
-from services.dxf_exporter import export_to_dxf
+try:
+    from services.dxf_exporter import export_to_dxf
+except ImportError:
+    from backend.services.dxf_exporter import export_to_dxf
 
 logger = logging.getLogger(__name__)
 

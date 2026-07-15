@@ -102,3 +102,51 @@ async def test_generate_endpoint_svg_format():
     
     assert exc_info.value.status_code == 400
     assert "deprecated" in exc_info.value.detail.lower()
+
+@pytest.mark.anyio
+async def test_determinism_and_seeding():
+    request_data = GenerateRequest(
+        plot_size_sqft=1500.0,
+        floors=1,
+        rooms=[
+            RoomConfig(type="bedroom", count=2),
+            RoomConfig(type="bathroom", count=1),
+            RoomConfig(type="kitchen", count=1),
+            RoomConfig(type="living", count=1)
+        ],
+        user_tier="free",
+        prompt="I want to build a house on a 30x50 plot facing North with 2 bedrooms."
+    )
+    
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/v1/generate",
+        "headers": [],
+        "app": app
+    }
+    mock_request = Request(scope)
+    mock_request.state.limiter = app.state.limiter
+    
+    # Run first time
+    res1 = await generate_blueprint_endpoint(mock_request, request_data, format="json")
+    assert res1["success"] is True
+    layout1 = res1["data"]["floor_plan"]["rooms"]
+    
+    # Run second time
+    res2 = await generate_blueprint_endpoint(mock_request, request_data, format="json")
+    assert res2["success"] is True
+    layout2 = res2["data"]["floor_plan"]["rooms"]
+    
+    # Compare room lists (sort by ID to align)
+    rooms1 = sorted(layout1, key=lambda r: r["id"])
+    rooms2 = sorted(layout2, key=lambda r: r["id"])
+    
+    assert len(rooms1) == len(rooms2)
+    for r1, r2 in zip(rooms1, rooms2):
+        assert r1["id"] == r2["id"]
+        assert r1["x"] == r2["x"]
+        assert r1["y"] == r2["y"]
+        assert r1["width"] == r2["width"]
+        assert r1["height"] == r2["height"]
+

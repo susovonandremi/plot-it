@@ -25,9 +25,22 @@ export const generateBlueprint = async (requestData) => {
 };
 
 export const generateBlueprintStream = (requestData, onMessage) => {
-     return new Promise((resolve, reject) => {
+     let ws = null;
+     let timeoutId = null;
+
+     const promise = new Promise((resolve, reject) => {
           const wsUrl = API_BASE_URL.replace(/^http/, 'ws') + '/api/v1/stream/generate';
-          const ws = new WebSocket(wsUrl);
+          ws = new WebSocket(wsUrl);
+
+          timeoutId = setTimeout(() => {
+               console.warn("WebSocket generation stream timed out.");
+               if (ws) {
+                    try {
+                         ws.close();
+                    } catch (e) {}
+               }
+               reject(new Error("WebSocket stream timed out after 30 seconds"));
+          }, 30000);
 
           ws.onopen = () => {
                ws.send(JSON.stringify(requestData));
@@ -38,12 +51,18 @@ export const generateBlueprintStream = (requestData, onMessage) => {
                     const { event: eventName, data } = JSON.parse(event.data);
                     onMessage(eventName, data);
                     if (eventName === 'complete') {
+                         clearTimeout(timeoutId);
                          resolve(data);
-                         ws.close();
+                         try {
+                              ws.close();
+                         } catch (e) {}
                     }
                     if (eventName === 'error') {
+                         clearTimeout(timeoutId);
                          reject(new Error(data.message));
-                         ws.close();
+                         try {
+                              ws.close();
+                         } catch (e) {}
                     }
                } catch (e) {
                     console.error("Error parsing WS message", e);
@@ -51,23 +70,37 @@ export const generateBlueprintStream = (requestData, onMessage) => {
           };
 
           ws.onerror = (event) => {
+               clearTimeout(timeoutId);
                reject(new Error("WebSocket connection failed. Check that the backend server is running on " + wsUrl));
           };
           
           ws.onclose = (event) => {
-               // If closed before resolving, reject with a meaningful error
+               clearTimeout(timeoutId);
                if (event.code !== 1000 && event.code !== 1005) {
                     reject(new Error(`WebSocket closed unexpectedly (code ${event.code}): ${event.reason || 'No reason provided'}`));
                }
           };
      });
+
+     const abort = () => {
+          clearTimeout(timeoutId);
+          if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+               try {
+                    ws.close();
+               } catch (e) {}
+          }
+     };
+
+     return { promise, abort };
 };
 
 export const recommendRooms = async (plotData, answers) => {
      try {
           const response = await axios.post(`${API_BASE_URL}/api/v1/consultation/recommend`, {
                plot_size_sqft: plotData.plot_size_sqft,
-               orientation: plotData.orientation,
+               plot_width_ft: plotData.plot_width_ft,
+               plot_depth_ft: plotData.plot_depth_ft,
+               entry_direction: plotData.entry_direction,
                answers: answers
           });
           return response.data.data;

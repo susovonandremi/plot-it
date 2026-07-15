@@ -147,6 +147,7 @@ class ConstraintSolver:
         max_time_seconds: float = 5.0,
         fixed_positions: Optional[Dict[str, Dict]] = None,
         floor_number: int = 0,
+        random_seed: Optional[int] = None,
     ) -> Dict[str, Any]:
         vastu_assignments = vastu_assignments or {}
         fixed_positions = fixed_positions or {}
@@ -163,7 +164,7 @@ class ConstraintSolver:
             result = self._build_and_solve(
                 expanded, vastu_assignments, entry_direction,
                 max_time_seconds, fixed_positions=fixed_positions, 
-                floor_number=floor_number, **params
+                floor_number=floor_number, random_seed=random_seed, **params
             )
             if result['status'] in ('OPTIMAL', 'FEASIBLE'):
                 if attempt > 0:
@@ -188,12 +189,13 @@ class ConstraintSolver:
         use_adjacency: bool = True,
         use_vastu: bool = True,
         strict_topology: bool = False,
+        random_seed: Optional[int] = None,
     ) -> Dict[str, Any]:
         fixed_positions = fixed_positions or {}
         n = len(expanded)
         model = cp_model.CpModel()
 
-        xs, ys, ws, hs = [], [], [], []
+        xs, ys, ws, hs, area_vars = [], [], [], [], []
         x_intervals, y_intervals = [], []
 
         for i, room in enumerate(expanded):
@@ -248,6 +250,7 @@ class ConstraintSolver:
 
             area_var = model.NewIntVar(min_area, max_area, f'area_{rid}')
             model.AddMultiplicationEquality(area_var, w, h)
+            area_vars.append(area_var)
 
             # Interval vars for NoOverlap2D
             x_end = model.NewIntVar(0, self.W, f'xe_{rid}')
@@ -361,19 +364,26 @@ class ConstraintSolver:
                 elif is_west_entry:
                     model.Add(xs[idx] + ws[idx] >= self.W - margin_x)
 
-            def constrain_sequence_order(idx1, idx2):
-                # Enforce that center of idx2 is deeper into plot than idx1
+            def constrain_sequence_order(idx1, idx2, weight=200):
+                # Enforce that center of idx2 is deeper into plot than idx1 (soft)
                 cx1 = 2 * xs[idx1] + ws[idx1]
                 cy1 = 2 * ys[idx1] + hs[idx1]
                 cx2 = 2 * xs[idx2] + ws[idx2]
                 cy2 = 2 * ys[idx2] + hs[idx2]
                 
-                if is_south_entry: model.Add(cy1 >= cy2)
-                elif is_north_entry: model.Add(cy1 <= cy2)
-                elif is_east_entry: model.Add(cx1 >= cx2)
-                elif is_west_entry: model.Add(cx1 <= cx2)
+                order_bool = model.NewBoolVar(f'ord_{idx1}_{idx2}')
+                if is_south_entry:
+                    model.Add(cy1 >= cy2).OnlyEnforceIf(order_bool)
+                elif is_north_entry:
+                    model.Add(cy1 <= cy2).OnlyEnforceIf(order_bool)
+                elif is_east_entry:
+                    model.Add(cx1 >= cx2).OnlyEnforceIf(order_bool)
+                elif is_west_entry:
+                    model.Add(cx1 <= cx2).OnlyEnforceIf(order_bool)
                 
-            def enforce_shared_edge(ia, ib, min_overlap_ft=3.0):
+                obj_terms.append(weight * order_bool)
+                
+            def enforce_shared_edge(ia, ib, min_overlap_ft=3.0, weight=500):
                 min_overlap = int(min_overlap_ft * SCALE)  # in solver units
 
                 # Rooms must touch: gap in one axis must be 0
@@ -396,8 +406,9 @@ class ConstraintSolver:
                 model.Add(ys[ib] + hs[ib] == ys[ia]).OnlyEnforceIf(bottom_a)
                 model.AddBoolOr([top_a, bottom_a]).OnlyEnforceIf(touch_y)
 
-                # At least one axis must be a true shared edge
-                model.AddBoolOr([touch_x, touch_y])
+                # Soft shared edge: touch_bool represents if they touch
+                touch_bool = model.NewBoolVar(f'touch_{ia}_{ib}')
+                model.AddBoolOr([touch_x, touch_y]).OnlyEnforceIf(touch_bool)
 
                 # Enforce minimum overlap in the perpendicular axis
                 overlap_y = model.NewIntVar(-self.H, self.H, f'ovy_{ia}_{ib}')
@@ -415,6 +426,8 @@ class ConstraintSolver:
                 model.AddMaxEquality(max_xs, [xs[ia], xs[ib]])
                 model.Add(overlap_x == min_xe - max_xs)
                 model.Add(overlap_x >= min_overlap).OnlyEnforceIf(touch_y)
+
+                obj_terms.append(weight * touch_bool)
 
             for p_idx in type_index.get('car_parking', []):
                 constrain_front(p_idx, strict=True)
@@ -517,9 +530,7 @@ class ConstraintSolver:
         
         # 1. Maximize total area coverage (weight: 1 per solver-unit²)
         for i in range(n):
-            area = model.NewIntVar(0, self.W * self.H, f'oa_{i}')
-            model.AddMultiplicationEquality(area, ws[i], hs[i])
-            obj_terms.append(area)
+            obj_terms.append(area_vars[i])
 
         # 2. Adjacency bonuses (soft)
         if use_adjacency:
@@ -596,7 +607,11 @@ class ConstraintSolver:
         # ── SOLVE ─────────────────────────────────────────────────────
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = max_time
-        solver.parameters.num_workers = 4
+        if random_seed is not None:
+            solver.parameters.random_seed = random_seed
+            solver.parameters.num_search_workers = 1
+        else:
+            solver.parameters.num_workers = 4
 
         t0 = time.perf_counter()
         status = solver.Solve(model)
@@ -657,18 +672,30 @@ class ConstraintSolver:
             _, typ_a, _, min_side, _ = ROOM_SIZES.get(nt, defaults)
             w = max(min_side, math.sqrt(typ_a))
             h = typ_a / w
+            
+            # Ensure single room is not larger than plot
+            w = min(w, self.plot_w)
+            h = min(h, self.plot_h)
+            
             if cx + w > self.plot_w:
-                cx = 0; cy += rh; rh = 0
+                cx = 0.0
+                cy += rh
+                rh = 0.0
+            
             if cy + h > self.plot_h:
-                h = max(3, self.plot_h - cy)
-            placed.append({
-                'id': room['id'], 'type': room.get('type', nt),
-                'normalized_type': nt,
-                'x': round(cx, 2), 'y': round(cy, 2),
-                'width': round(w, 2), 'height': round(h, 2),
+                h = max(1.0, self.plot_h - cy)
+                
+            r_placed = room.copy()
+            r_placed.update({
+                'x': round(cx, 2),
+                'y': round(cy, 2),
+                'width': round(w, 2),
+                'height': round(h, 2),
                 'area': round(w * h, 1),
             })
-            cx += w; rh = max(rh, h)
+            placed.append(r_placed)
+            cx += w
+            rh = max(rh, h)
 
         total_area = sum(r['area'] for r in placed)
         coverage = (total_area / self.plot_area * 100) if self.plot_area > 0 else 0
@@ -687,6 +714,7 @@ def solve_layout(
     max_time_seconds: float = 5.0,
     fixed_positions: Optional[Dict[str, Dict]] = None,
     floor_number: int = 0,
+    random_seed: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Top-level convenience function.
@@ -696,5 +724,5 @@ def solve_layout(
     return solver.solve(
         rooms, vastu_assignments, entry_direction, 
         max_time_seconds, fixed_positions=fixed_positions, 
-        floor_number=floor_number
+        floor_number=floor_number, random_seed=random_seed
     )
