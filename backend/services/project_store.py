@@ -42,6 +42,7 @@ async def get_db_connection():
 async def init_db():
     """Initializes the database schema and performs lightweight migrations if necessary."""
     if IS_POSTGRES:
+        assert asyncpg is not None
         logger.info("Initializing PostgreSQL database...")
         conn = await asyncpg.connect(DATABASE_URL)
         await conn.execute("""
@@ -102,6 +103,7 @@ async def save_project(project: Dict[str, Any]) -> str:
     owner_id = project.get("owner_id", "anonymous")
 
     if IS_POSTGRES:
+        assert asyncpg is not None
         conn = await asyncpg.connect(DATABASE_URL)
         await conn.execute("""
             INSERT INTO projects (id, name, prompt, svg, scores, created_at, owner_id)
@@ -128,6 +130,7 @@ async def save_project(project: Dict[str, Any]) -> str:
 async def list_projects(owner_id: str = "anonymous", limit: int = 20) -> List[Dict[str, Any]]:
     """Lists recent projects filtered by the owner_id."""
     if IS_POSTGRES:
+        assert asyncpg is not None
         conn = await asyncpg.connect(DATABASE_URL)
         rows = await conn.fetch(
             "SELECT id, name, prompt, scores, created_at, owner_id FROM projects WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2",
@@ -161,6 +164,7 @@ async def list_projects(owner_id: str = "anonymous", limit: int = 20) -> List[Di
 async def get_project(project_id: str) -> Optional[Dict[str, Any]]:
     """Gets a project by its project_id."""
     if IS_POSTGRES:
+        assert asyncpg is not None
         conn = await asyncpg.connect(DATABASE_URL)
         row = await conn.fetchrow("SELECT * FROM projects WHERE id = $1", project_id)
         await conn.close()
@@ -185,6 +189,7 @@ async def get_project(project_id: str) -> Optional[Dict[str, Any]]:
 async def delete_project(project_id: str) -> bool:
     """Deletes a project by its project_id."""
     if IS_POSTGRES:
+        assert asyncpg is not None
         conn = await asyncpg.connect(DATABASE_URL)
         status = await conn.execute("DELETE FROM projects WHERE id = $1", project_id)
         await conn.close()
