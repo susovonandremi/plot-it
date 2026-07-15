@@ -1,0 +1,13 @@
+.env
+*.db
+*.sqlite*
+__pycache__/
+*.pyc
+venv/
+.venv/
+.git/
+.claude/
+debug/
+tmp/
+*.log
+*_output.txt

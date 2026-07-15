@@ -29,7 +29,6 @@ from typing import List, Dict, Any, Optional
 
 from services.vastu_engine import assign_vastu_zones, calculate_vastu_score
 from services.vastu_heatmap import calculate_room_vastu_scores, apply_vastu_resizing, generate_vastu_heatmap
-from services.professional_svg_renderer import render_blueprint_professional
 from services.building_program import BuildingProgram, create_building_program
 from services.circulation_engine import CirculationEngine
 from services.structural_engine import StructuralEngine
@@ -47,7 +46,7 @@ from services.furniture_engine import place_furniture as FurnitureEngine
 from services.constraint_solver import solve_layout as cpsat_solve_layout
 from services.geometric_validator import validate_layout
 
-logger = logging.getLogger("plotai.stream")
+logger = logging.getLogger("plotit.stream")
 router = APIRouter()
 
 
@@ -253,8 +252,9 @@ async def stream_generate(ws: WebSocket):
                     placed_rooms = list(layout)
                     all_floor_layouts[fn] = layout
 
-        if not placed_rooms and 0 in all_floor_layouts:
-            placed_rooms = all_floor_layouts[0]
+        # Determine the primary layout rooms for downstream tools
+        primary_fn = 1 if total_floors > 1 else 0
+        placed_rooms = all_floor_layouts.get(primary_fn, all_floor_layouts.get(0, []))
 
         # ── STAGE 5: Analysis (Circulation, Structural, Scores) ─────────────
         await _emit(ws, "stage", {
@@ -270,7 +270,9 @@ async def stream_generate(ws: WebSocket):
         structural_data = struct_engine.analyze(placed_rooms)
 
         # Accessibility & Furniture
-        updated_doors, accessibility_report = ensure_full_accessibility(placed_rooms, doors=[], entry_direction=entry_direction)
+        from services.geometry_processor import find_door_positions
+        initial_doors = find_door_positions(placed_rooms, program)
+        updated_doors, accessibility_report = ensure_full_accessibility(placed_rooms, doors=initial_doors, entry_direction=entry_direction)
         furniture_placements = FurnitureEngine(placed_rooms, updated_doors)
 
         # Vastu Heatmap
@@ -298,24 +300,45 @@ async def stream_generate(ws: WebSocket):
             "message": "Rendering professional blueprints for all floors..."
         })
         
+        format_param = request_data.get("format", "json")
+        if format_param != "json":
+            await _emit(ws, "error", {
+                "message": "The legacy raw SVG format has been deprecated. Please use format=json."
+            })
+            return
+
+        final_floor_schemas = {}
+        from services.schema_serializer import serialize_floor_plan
         for fn, layout in all_floor_layouts.items():
-            floor_svgs[fn] = render_blueprint_professional(
-                placement_data=layout,
-                plot_width=plot_width,
-                plot_height=plot_depth,
-                vastu_score=vastu_results,
-                user_tier=user_tier,
-                original_unit_system=original_unit_system,
-                building_program=program,
-                floor_number=fn,
-                furniture_items=furniture_placements if fn >= 1 and fn <= total_floors else [],
-                shape_config={"type": "rectangle", "width": bw_ft, "depth": bd_ft},
-            )
+            try:
+                floor_struct = StructuralEngine(plot_width, plot_depth).analyze(layout)
+            except Exception:
+                floor_struct = {"columns": [], "beams": [], "wall_boundary": {"geometry": None}}
+            
+            try:
+                schema = serialize_floor_plan(
+                    placed_rooms=layout,
+                    plot_width=plot_width,
+                    plot_height=plot_depth,
+                    vastu_score=vastu_results,
+                    building_program=program,
+                    floor_number=fn,
+                    shape_config={"type": "rectangle", "width": bw_ft, "depth": bd_ft},
+                    heavy_elements=floor_struct,
+                    furniture_items=furniture_placements if fn >= 1 and fn <= total_floors else [],
+                    unit_system="metric" if original_unit_system and original_unit_system.get('system') == 'metric' else "imperial",
+                    solver_time_ms=0
+                )
+                final_floor_schemas[fn] = schema
+            except Exception as e:
+                logger.error(f"WS JSON serialization failed for floor {fn}: {e}")
+                if fn == (1 if total_floors > 1 else 0):
+                    await _emit(ws, "error", {"message": f"Core floor serialization failed: {str(e)}"})
+                    return
+                final_floor_schemas[fn] = {}
 
         # ── STAGE 7: Complete ───────────────────────────────────────────────
-        await _emit(ws, "complete", {
-            "svg": floor_svgs.get(1, floor_svgs.get(0, "")),
-            "floor_svgs": floor_svgs,
+        complete_payload = {
             "floor_labels": FLOOR_LABELS,
             "all_floor_layouts": all_floor_layouts,
             "vastu_score": vastu_results["score"],
@@ -324,7 +347,7 @@ async def stream_generate(ws: WebSocket):
             "vastu_heatmap": vastu_heatmap,
             "dimensions": (plot_width, plot_depth),
             "engine": "cpsat_stream_v4",
-            "floor_label": program.get_floor_label(1 if total_floors > 0 else 0),
+            "floor_label": program.get_floor_label(1 if total_floors > 1 else 0),
             "building_type": building_type,
             "circulation": circulation_data,
             "structural": structural_data,
@@ -334,7 +357,11 @@ async def stream_generate(ws: WebSocket):
             "proportions": proportion_data,
             "accessibility_report": accessibility_report,
             "current_layout": placed_rooms,
-        })
+            "floor_plan": final_floor_schemas.get(1 if total_floors > 1 else 0, final_floor_schemas.get(0, {})),
+            "floor_plans": {str(fn): schema for fn, schema in final_floor_schemas.items()}
+        }
+
+        await _emit(ws, "complete", complete_payload)
 
         logger.info(f"WebSocket generation complete: {plot_size_sqft} sqft, {len(placed_rooms)} rooms")
 
@@ -343,9 +370,11 @@ async def stream_generate(ws: WebSocket):
     except json.JSONDecodeError as e:
         await _emit(ws, "error", {"message": f"Invalid JSON payload: {str(e)}"})
     except Exception as e:
-        logger.error(f"WebSocket generation error: {e}", exc_info=True)
+        import uuid
+        correlation_id = uuid.uuid4().hex[:8]
+        logger.error(f"WebSocket generation error [CID:{correlation_id}]: {e}", exc_info=True)
         try:
-            await _emit(ws, "error", {"message": str(e)})
+            await _emit(ws, "error", {"message": f"An unexpected error occurred during stream generation. Reference ID: {correlation_id}"})
         except Exception:
             pass
     finally:

@@ -2,10 +2,9 @@
 import { useState, useEffect } from 'react';
 import { useConsultationStore } from '@/store/consultationStore';
 import OptionButton from './OptionButton';
-import { ChevronLeft, ChevronRight, Sparkles, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { recommendRooms } from '@/api/plotai';
+import { recommendRooms } from '@/api/plotit';
 import { toast } from 'sonner';
+import { ChevronLeft, ChevronRight, Loader2, BarChart3 } from 'lucide-react';
 
 export default function QuestionCard({ question, questionNumber }) {
      const {
@@ -70,29 +69,29 @@ export default function QuestionCard({ question, questionNumber }) {
      const isLastQuestion = currentQuestionIndex === questions.length - 1;
 
      return (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="space-y-4 animate-in fade-in duration-200">
                {/* Question Header */}
-               <div>
-                    <div className="flex items-center gap-2 mb-2">
-                         <span className="text-xs font-mono font-medium text-accent bg-accent/10 px-2 py-0.5 rounded uppercase tracking-wider">
+               <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                         <span className="text-[10px] font-data-mono font-medium text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20 uppercase tracking-wider">
                               Step {questionNumber}
                          </span>
-                         <span className="text-xs font-mono font-medium text-secondary/60 uppercase tracking-wider">
+                         <span className="text-[10px] font-data-mono font-medium text-on-surface-variant uppercase tracking-wider">
                               of {questions.length}
                          </span>
                     </div>
-                    <h2 className="text-2xl font-bold text-secondary font-heading leading-tight">
+                    <h2 className="text-sm font-bold text-on-surface font-sans leading-tight">
                          {question.text}
                     </h2>
                     {question.type === 'multi_select' && (
-                         <p className="text-sm text-secondary/60 mt-2 font-body italic">
+                         <p className="text-[11px] text-on-surface-variant font-sans italic">
                               Select {question.max_selections ? `up to ${question.max_selections}` : 'as many as apply'}
                          </p>
                     )}
                </div>
 
                {/* Options List OR Text Input */}
-               <div className="grid gap-3">
+               <div className="grid gap-2">
                     {question.options && question.options.length > 0 ? (
                          question.options.map((option, index) => (
                               <OptionButton
@@ -106,7 +105,7 @@ export default function QuestionCard({ question, questionNumber }) {
                          ))
                     ) : (
                          <textarea
-                              className="w-full h-32 p-4 border rounded-xl border-white/10 focus:border-accent focus:ring-4 focus:ring-accent/20 outline-none resize-none bg-glass text-secondary font-body transition-all"
+                              className="w-full h-24 p-3 border rounded border-outline-variant bg-surface text-on-surface text-xs font-mono placeholder:text-on-surface-variant/40 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none resize-none transition-all"
                               placeholder="Type your answer here..."
                               value={typeof localAnswer === 'string' ? localAnswer : ''}
                               onChange={handleTextChange}
@@ -116,19 +115,18 @@ export default function QuestionCard({ question, questionNumber }) {
                </div>
 
                {/* Navigation Footer */}
-               <div className="flex items-center justify-between pt-6 border-t border-white/5">
-                    <Button
-                         variant="ghost"
+               <div className="flex items-center justify-between pt-4 border-t border-outline-variant/30">
+                    <button
                          onClick={previousQuestion}
                          disabled={currentQuestionIndex === 0}
-                         className="flex items-center gap-2 text-secondary/60 hover:text-secondary hover:bg-glass transition-colors"
+                         className="flex items-center gap-1 text-[11px] font-data-mono text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                     >
-                         <ChevronLeft className="w-4 h-4" />
+                         <ChevronLeft size={14} />
                          <span>Back</span>
-                    </Button>
+                    </button>
 
                     {isLastQuestion ? (
-                         <Button
+                         <button
                               onClick={async () => {
                                    setIsSubmitting(true);
                                    try {
@@ -144,29 +142,29 @@ export default function QuestionCard({ question, questionNumber }) {
                                    }
                               }}
                               disabled={!canProceed || isSubmitting}
-                              className="bg-accent hover:bg-accent-hover text-dominant font-semibold px-8 py-6 rounded-xl h-auto transition-all active:scale-95 flex items-center gap-2 hover:shadow-neon"
+                              className="bg-primary hover:bg-primary-fixed text-on-primary font-bold px-4 py-2 rounded text-xs transition-all active:scale-95 flex items-center gap-1.5 hover:shadow-[0_0_10px_rgba(138,235,255,0.3)] disabled:opacity-50"
                          >
                               {isSubmitting ? (
                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        <Loader2 size={14} className="animate-spin" />
                                         <span>Analyzing...</span>
                                    </>
                               ) : (
                                    <>
-                                        <span>See Recommendations</span>
-                                        <Sparkles className="w-4 h-4" />
+                                        <span>Recommendations</span>
+                                        <BarChart3 size={12} />
                                    </>
                               )}
-                         </Button>
+                         </button>
                     ) : (
-                         <Button
+                         <button
                               onClick={nextQuestion}
                               disabled={!canProceed}
-                              className="bg-accent hover:bg-accent-hover text-dominant font-semibold px-8 py-6 rounded-xl h-auto transition-all active:scale-95 flex items-center gap-2 hover:shadow-neon"
+                              className="bg-primary hover:bg-primary-fixed text-on-primary font-bold px-5 py-2 rounded text-xs transition-all active:scale-95 flex items-center gap-1 hover:shadow-[0_0_10px_rgba(138,235,255,0.3)] disabled:opacity-50"
                          >
                               <span>Next</span>
-                              <ChevronRight className="w-4 h-4" />
-                         </Button>
+                              <ChevronRight size={14} />
+                         </button>
                     )}
                </div>
           </div>

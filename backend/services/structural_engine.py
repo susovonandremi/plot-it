@@ -21,6 +21,8 @@ from typing import List, Dict, Any, Tuple, Set, Optional
 from shapely.geometry import Polygon, box as shapely_box, mapping
 from shapely.ops import unary_union
 
+from services.constants import WALL_ADJACENCY_TOL
+
 logger = logging.getLogger(__name__)
 
 
@@ -168,7 +170,7 @@ def generate_wall_boundary(
     else:
         effective_min_x, effective_min_y, effective_max_x, effective_max_y = plot_polygon.bounds
 
-    TOL = 0.5 # 6-inch tolerance for boundary check
+    TOL = WALL_ADJACENCY_TOL
     
     shrunken: List[Polygon] = []
     for poly in room_polygons:
@@ -215,9 +217,14 @@ class StructuralEngine:
         self.plot_width = plot_width
         self.plot_height = plot_height
 
-    def analyze(self, placed_rooms: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def analyze(self, placed_rooms: List[Dict[str, Any]], door_positions: Optional[List[Dict]] = None) -> Dict[str, Any]:
         """
         Full structural analysis pipeline.
+
+        Args:
+            placed_rooms: List of room dicts with x, y, width, height
+            door_positions: Optional list of door dicts with x, y, width, orientation
+                           Used to filter out columns that would block doorways.
 
         Returns:
             {
@@ -228,6 +235,38 @@ class StructuralEngine:
             }
         """
         columns = self.find_column_positions(placed_rooms)
+
+        # ── COLUMN-DOOR COLLISION FILTER ──────────────────────────────────
+        # Remove any column whose bounding box intersects a door opening.
+        # This prevents structural columns from being rendered inside doorways.
+        if door_positions:
+            safe_columns = []
+            for col in columns:
+                col_box = shapely_box(
+                    col.x - col.width / 2, col.y - col.height / 2,
+                    col.x + col.width / 2, col.y + col.height / 2
+                )
+                blocked = False
+                for door in door_positions:
+                    dx = door.get('x', 0)
+                    dy = door.get('y', 0)
+                    dw = door.get('width', 3.0)
+                    # Door bounding box (with a small margin)
+                    margin = 0.5
+                    if door.get('orientation') == 'vertical':
+                        door_box = shapely_box(dx - margin, dy - dw / 2 - margin,
+                                               dx + margin, dy + dw / 2 + margin)
+                    else:
+                        door_box = shapely_box(dx - dw / 2 - margin, dy - margin,
+                                               dx + dw / 2 + margin, dy + margin)
+                    if col_box.intersects(door_box):
+                        blocked = True
+                        logger.debug(f"Column at ({col.x}, {col.y}) blocked by door at ({dx}, {dy})")
+                        break
+                if not blocked:
+                    safe_columns.append(col)
+            columns = safe_columns
+
         wall_boundary = self.build_wall_boundary(placed_rooms)
         beams = self.calculate_beam_spans(columns)
 

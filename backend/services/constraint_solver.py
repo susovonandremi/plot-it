@@ -264,6 +264,47 @@ class ConstraintSolver:
         # ── NON-OVERLAP (hard constraint) ─────────────────────────────
         model.AddNoOverlap2D(x_intervals, y_intervals)
 
+        # ── CORE ACCESSIBILITY / CONNECTIVITY CONSTRAINTS ────────────────────
+        # Every bedroom, kitchen, pooja, study, and staircase must touch at least one circulation hub
+        # (passage, corridor, hallway, living, dining, foyer) to guarantee a reachable door opening.
+        circulation_types = {'passage', 'corridor', 'hallway', 'living', 'dining', 'foyer'}
+        hubs = [i for i, r in enumerate(expanded) if r['normalized_type'] in circulation_types]
+        
+        if hubs:
+            for i, room in enumerate(expanded):
+                nt = room['normalized_type']
+                if nt in ('bedroom', 'master_bedroom', 'kitchen', 'pooja', 'staircase', 'stairs', 'study'):
+                    touching_bools = []
+                    for hub_idx in hubs:
+                        r_touch = model.NewBoolVar(f'conn_touch_{i}_{hub_idx}')
+                        xe_r = xs[i] + ws[i]
+                        xe_h = xs[hub_idx] + ws[hub_idx]
+                        ye_r = ys[i] + hs[i]
+                        ye_h = ys[hub_idx] + hs[hub_idx]
+                        
+                        gx1 = model.NewIntVar(0, self.W, f'cgx1_{i}_{hub_idx}')
+                        gx2 = model.NewIntVar(0, self.W, f'cgx2_{i}_{hub_idx}')
+                        gy1 = model.NewIntVar(0, self.H, f'cgy1_{i}_{hub_idx}')
+                        gy2 = model.NewIntVar(0, self.H, f'cgy2_{i}_{hub_idx}')
+                        gap_x = model.NewIntVar(0, self.W, f'cgapx_{i}_{hub_idx}')
+                        gap_y = model.NewIntVar(0, self.H, f'cgapy_{i}_{hub_idx}')
+                        
+                        model.AddMaxEquality(gx1, [0, xs[i] - xe_h])
+                        model.AddMaxEquality(gx2, [0, xs[hub_idx] - xe_r])
+                        model.AddMaxEquality(gy1, [0, ys[i] - ye_h])
+                        model.AddMaxEquality(gy2, [0, ys[hub_idx] - ye_r])
+                        model.Add(gap_x == gx1 + gx2)
+                        model.Add(gap_y == gy1 + gy2)
+                        
+                        total_gap = model.NewIntVar(0, self.W + self.H, f'ctg_{i}_{hub_idx}')
+                        model.Add(total_gap == gap_x + gap_y)
+                        model.Add(total_gap == 0).OnlyEnforceIf(r_touch)
+                        model.Add(total_gap > 0).OnlyEnforceIf(r_touch.Not())
+                        touching_bools.append(r_touch)
+                    
+                    if touching_bools:
+                        model.AddBoolOr(touching_bools)
+
         # ── OBJECTIVE ─────────────────────────────────────────────────
         obj_terms = []
 

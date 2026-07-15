@@ -1,7 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
-import { ZoomIn, ZoomOut, RotateCcw, Layers, Download, Image as ImageIcon, FileText, Code, ChevronDown } from 'lucide-react';
+import { 
+     ZoomIn, ZoomOut, RotateCcw, Layers, Download, Image as ImageIcon, 
+     FileText, Code, ChevronDown, Hammer, Ruler, Flame, CheckCircle, AlertTriangle 
+} from 'lucide-react';
 import { jsPDF } from 'jspdf';
+import BlueprintRenderer from './BlueprintRenderer';
 
 export default function InteractiveCanvas({ 
     blueprintSvg, 
@@ -10,7 +14,8 @@ export default function InteractiveCanvas({
     activeFloor, 
     onFloorChange,
     isGenerating, 
-    generationProgress 
+    generationProgress,
+    blueprintScore
 }) {
      const [showFurniture, setShowFurniture] = useState(true);
      const [showStructure, setShowStructure] = useState(true);
@@ -20,24 +25,57 @@ export default function InteractiveCanvas({
      const [showDownloadMenu, setShowDownloadMenu] = useState(false);
      const svgContainerRef = useRef(null);
 
-     // Parse viewBox from the generated SVG to get the true aspect ratio
-     const getExportDimensions = (svgString, maxDim = 3600) => {
-          if (!svgString) return { width: 2400, height: 2400 };
-          const vbMatch = svgString.match(/viewBox="([^"]+)"/);
-          if (!vbMatch) return { width: 2400, height: 2400 };
-          
-          const vbValues = vbMatch[1].split(/[ ,]+/).map(Number);
-          if (vbValues.length !== 4) return { width: 2400, height: 2400 };
-          
-          const [, , vbW, vbH] = vbValues;
-          if (!vbW || !vbH) return { width: 2400, height: 2400 };
-          
-          const aspect = vbW / vbH;
-          if (aspect >= 1) {
-               return { width: maxDim, height: Math.round(maxDim / aspect) };
-          } else {
-               return { width: Math.round(maxDim * aspect), height: maxDim };
+     const axisLabels = {
+          vastu: "Vastu Compliance",
+          space_efficiency: "Space Efficiency",
+          accessibility: "Accessibility",
+          proportions: "Proportions",
+          ventilation: "Ventilation Potential"
+     };
+
+     const isJsonSchema = typeof blueprintSvg === 'object' || (typeof blueprintSvg === 'string' && blueprintSvg.trim() && !blueprintSvg.trim().startsWith('<svg'));
+     let parsedSchema = null;
+     if (isJsonSchema) {
+          try {
+               parsedSchema = typeof blueprintSvg === 'object' ? blueprintSvg : JSON.parse(blueprintSvg);
+          } catch (e) {
+               console.error("Failed to parse floor plan JSON schema:", e);
           }
+     }
+
+     // Derive export dimensions from the live SVG element's viewBox attribute.
+     // This ensures export dimensions always match the rendered canvas exactly,
+     // regardless of coordinate system changes (SCALE, PADDING, etc.).
+     const getExportDimensions = (_svgString, maxDim = 3600) => {
+          // Strategy 1: Read viewBox from the live SVG DOM element
+          const svgElement = svgContainerRef.current?.querySelector('svg');
+          if (svgElement) {
+               const vb = svgElement.getAttribute('viewBox');
+               if (vb) {
+                    const parts = vb.split(/[\s,]+/).map(Number);
+                    if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+                         const aspect = parts[2] / parts[3];
+                         return aspect >= 1
+                              ? { width: maxDim, height: Math.round(maxDim / aspect) }
+                              : { width: Math.round(maxDim * aspect), height: maxDim };
+                    }
+               }
+          }
+
+          // Strategy 2: Derive from schema metadata (uses coordinateTransform constants)
+          if (isJsonSchema && parsedSchema?.metadata) {
+               const { plot_width_ft, plot_height_ft } = parsedSchema.metadata;
+               // Mirror the computeViewBox formula from coordinateTransform.js
+               // SCALE=30, PADDING=80, title block=120
+               const w = plot_width_ft * 30.0 + 2 * 80.0;
+               const h = plot_height_ft * 30.0 + 2 * 80.0 + 120.0;
+               const aspect = w / h;
+               return aspect >= 1
+                    ? { width: maxDim, height: Math.round(maxDim / aspect) }
+                    : { width: Math.round(maxDim * aspect), height: maxDim };
+          }
+
+          return { width: 2400, height: 2400 };
      };
 
      const handleDownload = async (format) => {
@@ -107,23 +145,46 @@ export default function InteractiveCanvas({
 
      if (!blueprintSvg && !isGenerating) {
           return (
-               <div className="h-full w-full flex flex-col items-center justify-center text-white/50 bg-transparent relative z-10">
-                    <div className="w-96 h-64 border-2 border-dashed border-white/10 rounded-xl flex items-center justify-center mb-4 opacity-50 backdrop-blur-sm">
-                         <span className="text-4xl text-white/20 font-heading font-bold tracking-widest">CANVAS</span>
+               <div className="h-full w-full flex flex-col items-center justify-center text-on-surface-variant bg-transparent relative z-10">
+                    {/* Architectural Grid Background for empty state */}
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(138,235,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(138,235,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,#000_10%,transparent_100%)] pointer-events-none"></div>
+                    
+                    <div className="relative flex flex-col items-center z-10">
+                         {/* Premium Icon / Graphic */}
+                         <div className="w-24 h-24 mb-6 relative flex items-center justify-center">
+                              <div className="absolute inset-0 border border-primary/20 rotate-45 rounded-xl shadow-[0_0_30px_rgba(138,235,255,0.1)]"></div>
+                              <div className="absolute inset-2 border border-primary/40 -rotate-12 rounded-lg opacity-50"></div>
+                              <span className="material-symbols-outlined text-5xl text-primary/80 drop-shadow-[0_0_10px_rgba(138,235,255,0.3)]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                                   architecture
+                              </span>
+                         </div>
+                         
+                         <h3 className="text-headline-md font-bold text-on-surface mb-2 font-mono tracking-wide">NO BLUEPRINT LOADED</h3>
+                         <p className="text-body-sm text-on-surface-variant max-w-sm text-center opacity-80 leading-relaxed">
+                              Use the CAD Copilot to generate a property layout, or upload an existing project to begin visualization.
+                         </p>
+                         
+                         {/* Decorative technical lines */}
+                         <div className="mt-12 flex items-center gap-4 opacity-30">
+                              <div className="h-px w-16 bg-gradient-to-r from-transparent to-primary"></div>
+                              <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
+                              <span className="text-label-caps tracking-[0.2em] text-primary">AWAITING INPUT</span>
+                              <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
+                              <div className="h-px w-16 bg-gradient-to-l from-transparent to-primary"></div>
+                         </div>
                     </div>
-                    <p className="font-light tracking-wide">Generate a blueprint to see it here.</p>
                </div>
           );
      }
 
      if (!blueprintSvg && isGenerating) {
           return (
-               <div className="h-full w-full flex flex-col items-center justify-center text-secondary bg-transparent relative z-10">
-                    <div className="w-96 h-64 border-2 border-dashed border-accent/30 rounded-xl flex flex-col items-center justify-center mb-4 p-8 relative overflow-hidden bg-accent/5 backdrop-blur-md shadow-neon">
-                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-accent/10 to-transparent -translate-x-[100%] animate-[shimmer_2s_infinite]" />
-                         <Layers className="w-12 h-12 text-accent mb-4 animate-pulse" />
-                         <span className="text-xl text-accent font-heading font-bold tracking-wide mb-2 drop-shadow-md">Generating Blueprint...</span>
-                         <span className="text-sm text-secondary/70 font-light">{generationProgress?.stage ? generationProgress.stage.replace('_', ' ') : 'Processing'}</span>
+               <div className="h-full w-full flex flex-col items-center justify-center text-primary bg-transparent relative z-10">
+                    <div className="w-96 h-64 border-2 border-dashed border-primary/30 rounded-xl flex flex-col items-center justify-center mb-4 p-8 relative overflow-hidden bg-primary/5 backdrop-blur-md shadow-[0_0_20px_rgba(138,235,255,0.1)]">
+                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent -translate-x-[100%] animate-[shimmer_2s_infinite]" />
+                         <Bot size={48} className="text-primary mb-4 animate-pulse" />
+                         <span className="text-xl text-primary font-bold tracking-wide mb-2 drop-shadow-md">Generating Blueprint...</span>
+                         <span className="text-sm text-primary/70 font-light">{generationProgress?.stage ? generationProgress.stage.replace('_', ' ') : 'Processing'}</span>
                     </div>
                </div>
           );
@@ -131,19 +192,36 @@ export default function InteractiveCanvas({
 
      return (
           <div className="h-full w-full relative overflow-hidden group">
-               {/* Layer Controls & Download Toolbar */}
-               <div className="absolute top-6 right-20 z-20 mr-2 pointer-events-auto flex gap-2">
-                    <div className="flex bg-glass backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 shadow-lg">
-                         <button onClick={() => setShowFurniture(!showFurniture)} className={`px-3 py-1.5 text-sm font-medium transition-colors rounded ${showFurniture ? 'bg-white/10 text-accent' : 'text-secondary/60 hover:text-secondary'}`}>Furniture</button>
-                         <button onClick={() => setShowStructure(!showStructure)} className={`px-3 py-1.5 text-sm font-medium transition-colors rounded ${showStructure ? 'bg-white/10 text-purple-400' : 'text-secondary/60 hover:text-secondary'}`}>Structure</button>
-                         <button onClick={() => setShowVastu(!showVastu)} className={`px-3 py-1.5 text-sm font-medium transition-colors rounded ${showVastu ? 'bg-white/10 text-orange-400' : 'text-secondary/60 hover:text-secondary'}`}>Vastu</button>
-                         <button onClick={() => setShowDims(!showDims)} className={`px-3 py-1.5 text-sm font-medium transition-colors rounded ${showDims ? 'bg-white/10 text-emerald-400' : 'text-secondary/60 hover:text-secondary'}`}>Dimensions</button>
-                    </div>
+               {/* Floating Toolbar (Top Center) */}
+               <div className="absolute top-20 left-1/2 -translate-x-1/2 glass-panel rounded-lg px-2 py-1.5 flex items-center gap-1.5 z-20 pointer-events-auto shadow-lg">
+                    <button onClick={() => setShowStructure(!showStructure)} className={`px-2.5 py-1 rounded text-label-caps transition-colors flex items-center gap-1.5 ${showStructure ? 'bg-primary/20 text-primary border border-primary/30' : 'text-on-surface-variant hover:bg-white/5 border border-transparent'}`}>
+                         <Hammer size={14} />
+                         Walls
+                    </button>
+                    <div className="w-px h-4 bg-outline-variant mx-1"></div>
+                    <button className="px-2.5 py-1 rounded text-label-caps transition-colors text-on-surface-variant hover:bg-white/5 border border-transparent">
+                         Rooms
+                    </button>
+                    <button onClick={() => setShowFurniture(!showFurniture)} className={`px-2.5 py-1 rounded text-label-caps transition-colors flex items-center gap-1.5 ${showFurniture ? 'bg-primary/20 text-primary border border-primary/30' : 'text-on-surface-variant hover:bg-white/5 border border-transparent'}`}>
+                         Furniture
+                    </button>
+                    <button onClick={() => setShowDims(!showDims)} className={`px-2.5 py-1 rounded text-label-caps transition-colors flex items-center gap-1.5 ${showDims ? 'bg-primary/20 text-primary border border-primary/30' : 'text-on-surface-variant hover:bg-white/5 border border-transparent'}`}>
+                         <Ruler size={14} />
+                         Dims
+                    </button>
+                    <div className="w-px h-4 bg-outline-variant mx-1"></div>
+                    <button onClick={() => setShowVastu(!showVastu)} className={`px-2.5 py-1 rounded text-label-caps transition-colors flex items-center gap-1.5 ${showVastu ? 'bg-secondary/20 text-secondary border border-secondary/30' : 'text-on-surface-variant hover:bg-white/5 border border-transparent'}`}>
+                         <Flame size={14} />
+                         Vastu Heat
+                    </button>
+               </div>
 
+               {/* Download Menu (Top Right) */}
+               <div className="absolute top-20 right-6 z-20 pointer-events-auto">
                     <div className="relative">
                          <button 
                               onClick={() => setShowDownloadMenu(!showDownloadMenu)} 
-                              className="flex items-center gap-2 bg-glass backdrop-blur-md border border-white/10 rounded-lg px-3 py-2 text-sm font-medium text-secondary hover:text-white hover:bg-white/10 transition-colors shadow-lg"
+                              className="flex items-center gap-2 bg-glass backdrop-blur-md border border-white/10 rounded px-3 py-2 text-sm font-medium text-on-surface hover:bg-white/10 transition-colors shadow-lg"
                          >
                               <Download size={16} />
                               Export
@@ -151,20 +229,58 @@ export default function InteractiveCanvas({
                          </button>
 
                          {showDownloadMenu && (
-                              <div className="absolute top-full right-0 mt-2 w-36 bg-[#0f172a] border border-white/10 rounded-lg shadow-xl overflow-hidden py-1 z-50 animate-in fade-in slide-in-from-top-2">
-                                   <button onClick={() => handleDownload('png')} className="w-full text-left px-4 py-2 text-sm text-secondary hover:bg-white/10 hover:text-white flex items-center gap-2">
-                                        <ImageIcon size={14} className="text-blue-400" /> PNG Image
+                              <div className="absolute top-full right-0 mt-2 w-36 bg-surface-container border border-outline-variant rounded shadow-xl overflow-hidden py-1 z-50 animate-in fade-in slide-in-from-top-2">
+                                   <button onClick={() => handleDownload('png')} className="w-full text-left px-4 py-2 text-sm text-on-surface hover:bg-surface-variant hover:text-primary flex items-center gap-2">
+                                        <ImageIcon size={14} className="text-primary" /> PNG Image
                                    </button>
-                                   <button onClick={() => handleDownload('pdf')} className="w-full text-left px-4 py-2 text-sm text-secondary hover:bg-white/10 hover:text-white flex items-center gap-2">
-                                        <FileText size={14} className="text-red-400" /> PDF Document
+                                   <button onClick={() => handleDownload('pdf')} className="w-full text-left px-4 py-2 text-sm text-on-surface hover:bg-surface-variant hover:text-primary flex items-center gap-2">
+                                        <FileText size={14} className="text-error" /> PDF Document
                                    </button>
-                                   <button onClick={() => handleDownload('svg')} className="w-full text-left px-4 py-2 text-sm text-secondary hover:bg-white/10 hover:text-white flex items-center gap-2">
-                                        <Code size={14} className="text-emerald-400" /> SVG Vector
+                                   <button onClick={() => handleDownload('svg')} className="w-full text-left px-4 py-2 text-sm text-on-surface hover:bg-surface-variant hover:text-primary flex items-center gap-2">
+                                        <Code size={14} className="text-secondary" /> SVG Vector
                                    </button>
                               </div>
                          )}
                     </div>
                </div>
+
+               {/* Overall Grade Card (Top Right, floating below Export) */}
+               {blueprintScore && (
+                    <div className="absolute top-36 right-6 z-20 pointer-events-auto bg-surface-container/95 border border-outline-variant rounded-lg p-4 shadow-2xl w-64 backdrop-blur-md animate-in fade-in slide-in-from-top-4 duration-300">
+                         <div className="flex justify-between items-start mb-4">
+                              <div>
+                                   <span className="text-[10px] font-data-mono text-on-surface-variant uppercase tracking-widest block mb-1">Overall Grade</span>
+                                   <div className="flex items-baseline">
+                                        <span className="text-3xl font-bold text-primary font-mono">{blueprintScore.grade}</span>
+                                        <span className="text-xs text-secondary font-bold uppercase tracking-wider ml-2">{blueprintScore.label}</span>
+                                   </div>
+                              </div>
+                              <span className="text-secondary">
+                                   {blueprintScore.overall >= 70 ? (
+                                        <CheckCircle size={24} className="text-secondary" />
+                                   ) : (
+                                        <AlertTriangle size={24} className="text-error" />
+                                   )}
+                              </span>
+                         </div>
+                         <div className="space-y-3">
+                              {Object.entries(blueprintScore.axes || {}).map(([key, val]) => (
+                                   <div key={key} className="space-y-1.5">
+                                        <div className="flex justify-between text-[10px] font-data-mono text-on-surface-variant">
+                                             <span>{axisLabels[key] || key.replace('_', ' ')}</span>
+                                             <span className="text-primary font-bold">{Math.round(val)}</span>
+                                        </div>
+                                        <div className="h-1 bg-surface-container-low rounded-full overflow-hidden border border-outline-variant/10">
+                                             <div 
+                                                  className="h-full bg-primary transition-all duration-500" 
+                                                  style={{ width: `${Math.round(val)}%` }}
+                                             />
+                                        </div>
+                                   </div>
+                              ))}
+                         </div>
+                    </div>
+               )}
 
                <TransformWrapper
                     initialScale={0.85}
@@ -181,33 +297,33 @@ export default function InteractiveCanvas({
                     {({ zoomIn, zoomOut, resetTransform }) => (
                          <>
                               {/* Zoom Toolbar */}
-                              <div className="absolute top-6 right-6 z-20 flex flex-col bg-glass backdrop-blur-md border border-white/10 rounded-lg p-1 gap-1 shadow-lg pointer-events-auto">
-                                   <button onClick={() => zoomIn()} className="p-2 hover:bg-white/10 rounded text-secondary/70 hover:text-accent transition-colors duration-200" title="Zoom In">
+                              <div className="absolute top-20 left-6 z-20 flex flex-col bg-glass backdrop-blur-md border border-white/10 rounded p-1 gap-1 shadow-lg pointer-events-auto">
+                                   <button onClick={() => zoomIn()} className="p-2 hover:bg-white/10 rounded text-on-surface-variant hover:text-primary transition-colors duration-200" title="Zoom In">
                                         <ZoomIn size={20} />
                                    </button>
-                                   <button onClick={() => zoomOut()} className="p-2 hover:bg-white/10 rounded text-secondary/70 hover:text-accent transition-colors duration-200" title="Zoom Out">
+                                   <button onClick={() => zoomOut()} className="p-2 hover:bg-white/10 rounded text-on-surface-variant hover:text-primary transition-colors duration-200" title="Zoom Out">
                                         <ZoomOut size={20} />
                                    </button>
-                                   <button onClick={() => resetTransform()} className="p-2 hover:bg-white/10 rounded text-secondary/70 hover:text-accent transition-colors duration-200" title="Reset View">
+                                   <button onClick={() => resetTransform()} className="p-2 hover:bg-white/10 rounded text-on-surface-variant hover:text-primary transition-colors duration-200" title="Reset View">
                                         <RotateCcw size={20} />
                                    </button>
                               </div>
 
                                {/* Floor Selector */}
                                {floorSvgs && typeof floorSvgs === 'object' && Object.keys(floorSvgs).length > 1 && (
-                                    <div className="absolute bottom-6 left-6 z-50 flex bg-dominant/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-1.5 shadow-2xl pointer-events-auto items-center gap-1 animate-in slide-in-from-bottom-4 duration-500">
-                                         <div className="px-3 py-1 flex items-center gap-2 border-r border-white/10 mr-1">
-                                              <Layers size={14} className="text-secondary/40" />
-                                              <span className="text-[10px] font-bold text-secondary/40 uppercase tracking-widest hidden sm:inline">Floors</span>
+                                    <div className="absolute bottom-6 left-6 z-50 flex bg-surface-container/90 backdrop-blur-2xl border border-outline-variant rounded-lg p-1.5 shadow-2xl pointer-events-auto items-center gap-1 animate-in slide-in-from-bottom-4 duration-500">
+                                         <div className="px-3 py-1 flex items-center gap-2 border-r border-outline-variant mr-1">
+                                              <Layers size={14} className="text-on-surface-variant" />
+                                              <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest hidden sm:inline">Floors</span>
                                          </div>
                                          {Object.keys(floorSvgs).sort((a,b) => Number(a) - Number(b)).map((f) => (
                                               <button
                                                    key={f}
                                                    onClick={() => onFloorChange(f)}
-                                                   className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${
+                                                   className={`px-3 py-1.5 rounded text-xs font-bold transition-all duration-300 ${
                                                         activeFloor === f
-                                                        ? 'bg-accent text-primary shadow-neon scale-105'
-                                                        : 'text-secondary/60 hover:text-white hover:bg-white/5'
+                                                        ? 'bg-primary text-on-primary shadow-[0_0_10px_rgba(138,235,255,0.3)] scale-105'
+                                                        : 'text-on-surface-variant hover:text-on-surface hover:bg-white/5'
                                                    }`}
                                               >
                                                    {(floorLabels?.[f] || `F${f}`).split(' ')[0]}
@@ -217,36 +333,52 @@ export default function InteractiveCanvas({
                                )}
 
                               <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">
-    <div
-        id="blueprint-svg-wrapper"
-        ref={svgContainerRef}
-        className="transition-opacity duration-500"
-        dangerouslySetInnerHTML={{ __html: blueprintSvg }}
-        style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '100%',
-            height: '100%',
-            padding: '16px',
-            overflow: 'visible',
-        }}
-    />
-</TransformComponent>
-</>
-)}
-</TransformWrapper>
+                                   <div
+                                        id="blueprint-svg-wrapper"
+                                        ref={svgContainerRef}
+                                        className="transition-opacity duration-500"
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            width: '100%',
+                                            height: '100%',
+                                            padding: '16px',
+                                            overflow: 'visible',
+                                        }}
+                                   >
+                                        {isJsonSchema && parsedSchema ? (
+                                             <BlueprintRenderer 
+                                                  schema={parsedSchema} 
+                                                  layersVisibility={{
+                                                       furniture: showFurniture,
+                                                       structural: showStructure,
+                                                       annotations: showVastu,
+                                                       dimensions: showDims
+                                                  }}
+                                             />
+                                        ) : (
+                                             <div 
+                                                  className="w-full h-full flex items-center justify-center"
+                                                  dangerouslySetInnerHTML={{ __html: blueprintSvg }} 
+                                             />
+                                        )}
+                                   </div>
+                              </TransformComponent>
+                         </>
+                    )}
+               </TransformWrapper>
 
-{/* CSS Injection to control data-layer visibility and SVG responsiveness */}
-<style>{`
-#blueprint-svg-wrapper svg {
-    display: block;
-    width: 100% !important;
-    height: 100% !important;
-    max-width: 100%;
-    max-height: 100%;
-    margin: auto;
-}
+               {/* CSS Injection to control data-layer visibility and SVG responsiveness */}
+               <style>{`
+                    #blueprint-svg-wrapper svg {
+                        display: block;
+                        width: 100% !important;
+                        height: 100% !important;
+                        max-width: 100%;
+                        max-height: 100%;
+                        margin: auto;
+                    }
 
                     ${!showFurniture ? '#blueprint-svg-wrapper [data-layer="furniture"], #blueprint-svg-wrapper g[id*="furniture"], #blueprint-svg-wrapper path[class*="furniture"] { display: none !important; }' : ''}
                     ${!showStructure ? '#blueprint-svg-wrapper [data-layer="structural"] { display: none !important; }' : ''}

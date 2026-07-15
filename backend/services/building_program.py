@@ -605,44 +605,61 @@ class BuildingProgram:
             return rtype.lower().replace(' ', '_').replace('_room', '')
 
         if floor_number == 0:
-            # GROUND FLOOR: Public zone — hardcoded to real-world AutoCAD standard dimensions
-            # Based on: 30'×50' plot, buildable ~24'×44' after setbacks
-            # Circulation sequence: Entry Gate → Foyer (6'×8') → Living (12'×14') → Dining (10'×10') → Kitchen (10'×8', rear)
-            
-            rooms.append({'type': 'car_parking',  'count': 1, 'area_hint': 200, 'label': 'CAR PORCH',
-                          'notes': '11\'×15\' standard car porch'})              # 165 sqft
-            rooms.append({'type': 'foyer',        'count': 1, 'area_hint': 48,  'label': 'FOYER',
-                          'notes': '6\'×8\' entry foyer'})                       # 48 sqft
-            rooms.append({'type': 'staircase',    'count': 1, 'area_hint': 70,  'label': 'STAIRCASE',
-                          'notes': '7\'×10\' with 10" treads × 13 risers'})     # 70 sqft
-            
-            if self.has_lift:
-                rooms.append({'type': 'lift', 'count': 1, 'area_hint': 25, 'label': 'LIFT'})
-
-            # NOTE: sump and septic are EXTERNAL — keep is_external flag
-            rooms.append({'type': 'sump',         'count': 1, 'area_hint': 24,  'is_external': True, 'label': 'SUMP'})
-            rooms.append({'type': 'septic_tank',  'count': 1, 'area_hint': 24,  'is_external': True, 'label': 'SEPTIC'})
-            
-            # 3. Pull Public rooms from user_rooms if available
-            public_types = ['living', 'dining', 'kitchen', 'guest_bath', 'bathroom', 'toilet', 'wc', 'pooja', 'utility', 'wash']
-            
-            added_types = set()
-            for r in self.user_rooms:
-                ntype = _norm(r['type'])
-                if ntype in public_types and 'bedroom' not in ntype:
-                    # Limit to 1 bathroom on GF for G+1 unless explicitly requested more than 1 bath total
-                    if ntype in ['bathroom', 'toilet', 'wc'] and 'bathroom' in added_types:
-                        continue
+            if is_single_story:
+                # For single story, Ground Floor contains ALL user requested rooms
+                for r in self.user_rooms:
                     rooms.append(r.copy())
-                    added_types.add(ntype)
+                # Add staircase to access roof if not already present
+                if not any(_norm(r['type']) in ['staircase', 'stairs', 'stair_room'] for r in self.user_rooms):
+                    rooms.append({'type': 'staircase', 'count': 1, 'area_hint': 70, 'label': 'STAIRCASE',
+                                  'notes': '7\'×10\' stairs to access roof terrace'})
+                # Add passage/lobby if not present
+                if not any(_norm(r['type']) in ['passage', 'corridor', 'lobby', 'hallway'] for r in self.user_rooms):
+                    rooms.append({'type': 'passage', 'count': 1, 'area_hint': 40, 'label': 'LOBBY'})
+            else:
+                # GROUND FLOOR (Multi-floor): Public zone
+                rooms.append({'type': 'car_parking',  'count': 1, 'area_hint': 200, 'label': 'CAR PORCH',
+                              'notes': '11\'×15\' standard car porch'})              # 165 sqft
+                rooms.append({'type': 'foyer',        'count': 1, 'area_hint': 48,  'label': 'FOYER',
+                              'notes': '6\'×8\' entry foyer'})                       # 48 sqft
+                rooms.append({'type': 'staircase',    'count': 1, 'area_hint': 70,  'label': 'STAIRCASE',
+                              'notes': '7\'×10\' with 10" treads × 13 risers'})     # 70 sqft
+                
+                if self.has_lift:
+                    rooms.append({'type': 'lift', 'count': 1, 'area_hint': 25, 'label': 'LIFT'})
 
-            # Ensure minimal Public core if not in user_rooms
-            if 'living' not in added_types:
-                rooms.append({'type': 'Living Room', 'count': 1, 'area_hint': 220, 'label': 'LIVING'}) # 12x18+
-            if 'kitchen' not in added_types:
-                rooms.append({'type': 'Kitchen', 'count': 1, 'area_hint': 80, 'label': 'KITCHEN'})
-            if 'dining' not in added_types:
-                rooms.append({'type': 'Dining', 'count': 1, 'area_hint': 100, 'label': 'DINING'})
+                # NOTE: sump and septic are EXTERNAL — keep is_external flag
+                rooms.append({'type': 'sump',         'count': 1, 'area_hint': 24,  'is_external': True, 'label': 'SUMP'})
+                rooms.append({'type': 'septic_tank',  'count': 1, 'area_hint': 24,  'is_external': True, 'label': 'SEPTIC'})
+                
+                # 3. Pull Public rooms from user_rooms if available
+                public_types = ['living', 'dining', 'kitchen', 'guest_bath', 'bathroom', 'toilet', 'wc', 'pooja', 'utility', 'wash']
+                
+                added_types = set()
+                for r in self.user_rooms:
+                    ntype = _norm(r['type'])
+                    if ntype in public_types and 'bedroom' not in ntype:
+                        # Limit to 1 bathroom on GF for G+1 and clamp count to 1
+                        if ntype in ['bathroom', 'toilet', 'wc']:
+                            if 'bathroom' in added_types:
+                                continue
+                            r_copy = r.copy()
+                            r_copy['count'] = 1
+                            rooms.append(r_copy)
+                            added_types.add('bathroom')
+                        else:
+                            r_copy = r.copy()
+                            r_copy['count'] = 1
+                            rooms.append(r_copy)
+                            added_types.add(ntype)
+
+                # Ensure minimal Public core if not in user_rooms
+                if 'living' not in added_types:
+                    rooms.append({'type': 'Living Room', 'count': 1, 'area_hint': 220, 'label': 'LIVING'}) # 12x18+
+                if 'kitchen' not in added_types:
+                    rooms.append({'type': 'Kitchen', 'count': 1, 'area_hint': 80, 'label': 'KITCHEN'})
+                if 'dining' not in added_types:
+                    rooms.append({'type': 'Dining', 'count': 1, 'area_hint': 100, 'label': 'DINING'})
 
         elif floor_number == 1 and not is_single_story:
             # 1ST FLOOR: PRIVATE ZONE (Dynamic based on BHK)

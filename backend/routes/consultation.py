@@ -1,6 +1,10 @@
+import logging
+import uuid
 from fastapi import APIRouter
 from pydantic import BaseModel
 from services.nlp_parser import analyze_consultation_answers
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -59,13 +63,13 @@ async def get_room_recommendation(request: ConsultationRequest):
             "error": None
         }
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        correlation_id = uuid.uuid4().hex[:8]
+        logger.error(f"Consultation error [CID:{correlation_id}]: {str(e)}", exc_info=True)
         return {
             "success": False,
             "data": None,
             "error": {
                 "code": "CONSULTATION_ERROR",
-                "message": str(e)
+                "message": f"An error occurred while generating recommendations. Reference ID: {correlation_id}"
             }
         }

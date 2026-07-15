@@ -12,6 +12,9 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
+def is_llm_configured() -> bool:
+    return bool(GROQ_API_KEY and GROQ_API_KEY.strip() not in ["", "None", "your_groq_api_key_here"])
+
 # ═══════════════════════════════════════════════════════════════
 # UNIT NORMALIZATION LAYER
 # ═══════════════════════════════════════════════════════════════
@@ -158,6 +161,8 @@ def parse_prompt(user_prompt: str) -> dict:
     structured JSON with plot size, rooms, and orientation.
     NOW DETECTS incomplete input and triggers consultation mode.
     """
+    if not is_llm_configured():
+        raise ValueError("GROQ_API_KEY is not configured. Please set a valid API key in environment variables.")
 
     system_prompt = """
     You are an architectural assistant. Extract features from the prompt.
@@ -221,7 +226,7 @@ def parse_prompt(user_prompt: str) -> dict:
     }
 
     try:
-        response = requests.post(GROQ_URL, json=payload, headers=headers)
+        response = requests.post(GROQ_URL, json=payload, headers=headers, timeout=10.0)
         response.raise_for_status()
         raw_text = response.json()["choices"][0]["message"]["content"]
         
@@ -343,6 +348,8 @@ def generate_consultation_questions(parsed_data: dict) -> list:
     """
     Generates 4-6 strategic questions based on what info is missing.
     """
+    if not is_llm_configured():
+        raise ValueError("GROQ_API_KEY is not configured.")
     plot_size = parsed_data.get("plot_size_sqft", 0) or 0
     orientation = parsed_data.get("orientation", "unknown")
     missing = parsed_data.get("missing_info", [])
@@ -377,7 +384,7 @@ def generate_consultation_questions(parsed_data: dict) -> list:
     ]
     """
     
-    system_prompt = "You are a consultation assistant for PlotAI. Return ONLY valid JSON."
+    system_prompt = "You are a consultation assistant for PlotIt. Return ONLY valid JSON."
     
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     payload = {
@@ -390,7 +397,7 @@ def generate_consultation_questions(parsed_data: dict) -> list:
     }
     
     try:
-        response = requests.post(GROQ_URL, json=payload, headers=headers)
+        response = requests.post(GROQ_URL, json=payload, headers=headers, timeout=10.0)
         response.raise_for_status()
         raw_text = response.json()["choices"][0]["message"]["content"]
         raw_text = raw_text.strip()
@@ -444,6 +451,8 @@ def analyze_consultation_answers(plot_data: dict, answers: dict) -> dict:
     """
     Takes user's consultation answers and returns recommended room list.
     """
+    if not is_llm_configured():
+        raise ValueError("GROQ_API_KEY is not configured.")
     plot_size = plot_data.get("plot_size_sqft") or 0
     if isinstance(plot_size, str):
         try:
@@ -484,7 +493,7 @@ def analyze_consultation_answers(plot_data: dict, answers: dict) -> dict:
     }
     
     try:
-        response = requests.post(GROQ_URL, json=payload, headers=headers)
+        response = requests.post(GROQ_URL, json=payload, headers=headers, timeout=10.0)
         response.raise_for_status()
         raw_text = response.json()["choices"][0]["message"]["content"]
         raw_text = raw_text.strip()

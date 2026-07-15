@@ -23,6 +23,8 @@ import logging
 from collections import deque
 from typing import List, Dict, Any, Set, Tuple, Optional
 
+from services.constants import WALL_ADJACENCY_TOL
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,7 +53,7 @@ DOOR_WIDTHS = {
 
 DEFAULT_DOOR_WIDTH = 3.0
 
-WALL_TOL = 0.5  # Wall adjacency tolerance in feet
+WALL_TOL = WALL_ADJACENCY_TOL  # Imported from constants.py
 MIN_DOOR_MARGIN = 2.0  # Min distance from door center to wall corner
 
 
@@ -120,10 +122,12 @@ def _find_entry_room(placed_rooms: List[Dict[str, Any]], entry_direction: str = 
     """
     entry_types = {"entrance", "foyer", "verandah", "living", "passage", "corridor"}
 
-    # Filter for entry-type rooms
-    candidates = [r for r in placed_rooms if r["type"].lower().replace(" ", "_") in entry_types]
+    # Filter for entry-type rooms, excluding annotations
+    candidates = [r for r in placed_rooms if r["type"].lower().replace(" ", "_") in entry_types and not r.get('is_annotation', False)]
     if not candidates:
-        candidates = placed_rooms  # Fallback to all rooms
+        candidates = [r for r in placed_rooms if not r.get('is_annotation', False)]  # Fallback to physical rooms
+    if not candidates:
+        candidates = placed_rooms  # Absolute fallback
 
     # Score by proximity to entry edge
     def entry_score(room):
@@ -178,7 +182,7 @@ def verify_accessibility(
                 visited.add(neighbor)
                 queue.append(neighbor)
 
-    all_ids = {r["id"] for r in placed_rooms}
+    all_ids = {r["id"] for r in placed_rooms if not r.get('is_annotation', False)}
     isolated = all_ids - visited
 
     return {

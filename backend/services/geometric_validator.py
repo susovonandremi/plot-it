@@ -15,6 +15,8 @@ import logging
 from typing import List, Dict, Any, Tuple
 from shapely.geometry import box as shapely_box
 
+from services.constants import OVERLAP_TOL
+
 logger = logging.getLogger(__name__)
 
 
@@ -102,7 +104,7 @@ def validate_layout(
 
     # Check pairwise overlaps
     n = len(placed_rooms)
-    TOLERANCE = 0.15  # Allow tiny overlaps from floating-point rounding
+    TOLERANCE = OVERLAP_TOL  # Imported from constants.py
     for i in range(n):
         if room_polys[i] is None:
             continue

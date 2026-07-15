@@ -8,6 +8,9 @@ import requests
 # Add backend to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+import os
+os.environ["GROQ_API_KEY"] = "mock_key_for_testing"
+
 from services.nlp_parser import (
     parse_prompt, 
     generate_consultation_questions,
@@ -25,7 +28,7 @@ class TestNLPParser:
             mock_post.return_value.json.return_value = {
                 "choices": [{
                     "message": {
-                        "content": '{"plot_size_sqft": 1200, "is_complete": true, "rooms": [{"type": "bedroom", "count": 3}], "orientation": "north"}'
+                        "content": '{"plot_size_sqft": 1200, "is_complete": true, "rooms": [{"type": "bedroom", "count": 3}, {"type": "bathroom", "count": 2}], "orientation": "north"}'
                     }
                 }]
             }

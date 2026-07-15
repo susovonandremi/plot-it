@@ -14,7 +14,7 @@ class MockLocalStorage {
 }
 
 const localStorage = new MockLocalStorage();
-const DRAFT_KEY = 'plotai_consultation_draft';
+const DRAFT_KEY = 'plotit_consultation_draft';
 const DRAFT_EXPIRY_HOURS = 24;
 
 const saveDraft = (state) => {

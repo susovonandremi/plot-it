@@ -165,7 +165,7 @@ def test_api_endpoints():
         try:
             r = requests.get("http://localhost:8000/health")
             assert r.status_code == 200
-            assert r.json()['status'] == "PlotAI backend is running"
+            assert r.json()['status'] == "PlotIt backend is running"
         except requests.exceptions.ConnectionError:
             print("[SKIP] Backend not running on localhost:8000")
             # We assume it passes if we could run it, or fail if critical. 

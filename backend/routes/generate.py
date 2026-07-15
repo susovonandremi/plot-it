@@ -24,13 +24,13 @@ import copy
 import math
 import logging
 import re
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
+from services.auth import get_current_user
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 
 from services.vastu_engine import assign_vastu_zones, calculate_vastu_score
 from services.vastu_heatmap import calculate_room_vastu_scores, apply_vastu_resizing, generate_vastu_heatmap
-from services.professional_svg_renderer import render_blueprint_professional
 from services.building_program import BuildingProgram, create_building_program, generate_ground_floor_layout, generate_roof_floor_layout
 from services.circulation_engine import CirculationEngine
 from services.structural_engine import StructuralEngine
@@ -52,7 +52,7 @@ from services.project_store import save_project
 from services.constraint_solver import solve_layout as cpsat_solve_layout
 from services.geometric_validator import validate_layout
 
-logger = logging.getLogger("plotai")
+logger = logging.getLogger("plotit")
 router = APIRouter()
 
 
@@ -110,15 +110,19 @@ class GenerateRequest(BaseModel):
 
 @router.post("/generate")
 @limiter.limit("10/minute")
-async def generate_blueprint_endpoint(request: Request, request_data: GenerateRequest):
+async def generate_blueprint_endpoint(
+    request: Request,
+    request_data: GenerateRequest,
+    format: str = "json",
+    user_id: str = Depends(get_current_user)
+):
     """
     End-to-end pipeline:
       Style → BuildingProgram → Vastu → BSP Layout →
       Circulation → Structural → Heatmap → SVG → Diff
     """
-    pass
     try:
-        raw_rooms = [r.dict() for r in request_data.rooms]
+        raw_rooms = [r.model_dump() for r in request_data.rooms]
 
         # ── FEATURE C: Apply Style Constraints ───────────────────────────────
         style_metadata = None
@@ -158,11 +162,7 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
         # Normalize building type for reliable comparison
         norm_btype = (request_data.building_type or "independent_house").lower().strip().replace(" ", "_")
         
-        # G+1 override: independent houses with bedrooms are always at least 2 floors
-        if norm_btype in ("independent_house", "villa", "row_house") and request_data.floors <= 1:
-            total_floors = 2
-        else:
-            total_floors = max(request_data.floors, 1)
+        total_floors = max(request_data.floors, 1)
         
         # Clamp roof floor number to total_floors
         roof_floor_num = total_floors   # 0=ground, 1..total_floors-1=residential, total_floors=roof
@@ -264,7 +264,7 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
         # ══════════════════════════════════════════════════════════════════════
 
         layout_seed = int(__import__('hashlib').sha256(request_data.prompt.encode()).hexdigest(), 16) % (2**32)
-        shape_config = request_data.plot_shape.dict() if request_data.plot_shape else {"type": "rectangle"}
+        shape_config = request_data.plot_shape.model_dump() if request_data.plot_shape else {"type": "rectangle"}
         shape_config["width"] = buildable_width_ft
         shape_config["depth"] = buildable_depth_ft
 
@@ -432,7 +432,13 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
                           f"overlaps={validation['overlap_count']}")
 
         # ── PRIMARY PLACED ROOMS = typical floor 1 ──
-        placed_rooms = all_floor_layouts.get(1, all_floor_layouts.get(0, []))
+        primary_fn = 1 if total_floors > 1 else 0
+        placed_rooms = all_floor_layouts.get(primary_fn, all_floor_layouts.get(0, []))
+        if not placed_rooms:
+            raise HTTPException(
+                status_code=500,
+                detail="Solver failed to generate a valid layout. Please check constraints."
+            )
         layout_results = {
             'total_area_used': sum(r.get('area', r.get('width', 0) * r.get('height', 0)) for r in placed_rooms),
             'plot_dimensions': [plot_width, plot_depth],
@@ -478,9 +484,11 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
         structural_data = None
 
         # ── v3.0: ACCESSIBILITY ENGINE ─────────────────────────────────────────
+        from services.geometry_processor import find_door_positions
+        initial_doors = find_door_positions(placed_rooms, program)
         updated_doors, accessibility_report = ensure_full_accessibility(
             placed_rooms,
-            doors=[],
+            doors=initial_doors,
             entry_direction=request_data.entry_direction
         )
 
@@ -490,6 +498,7 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
             furniture_placements = FurnitureEngine(placed_rooms, updated_doors)
 
         # ── PER-FLOOR RENDERING ──
+        final_floor_schemas = {}
         for fn, floor_rooms_list in final_floor_layouts.items():
             # Compute structural columns per-floor for accuracy
             try:
@@ -504,33 +513,45 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
                     "columns": [], "beams": [], "wall_boundary": {"geometry": None}
                 }
 
-            try:
-                floor_svg = render_blueprint_professional(
-                    placement_data=floor_rooms_list,
-                    plot_width=plot_width,
-                    plot_height=plot_depth,
-                    vastu_score=vastu_results,
-                    user_tier=request_data.user_tier,
-                    original_unit_system=request_data.original_unit_system,
-                    heavy_elements=floor_structural_analysis,
-                    building_program=program,
-                    floor_number=fn,
-                    shape_config=shape_config,
-                    style_metadata=style_metadata,
-                    furniture_items=furniture_placements if fn >= 1 and fn <= total_floors else [],
+            if format == "json":
+                try:
+                    from services.schema_serializer import serialize_floor_plan
+                    schema = serialize_floor_plan(
+                        placed_rooms=floor_rooms_list,
+                        plot_width=plot_width,
+                        plot_height=plot_depth,
+                        vastu_score=vastu_results,
+                        building_program=program,
+                        floor_number=fn,
+                        shape_config=shape_config,
+                        heavy_elements=floor_structural_analysis,
+                        furniture_items=furniture_placements if fn >= 1 and fn <= total_floors else [],
+                        unit_system="metric" if request_data.original_unit_system and request_data.original_unit_system.get('system') == 'metric' else "imperial",
+                        solver_time_ms=0
+                    )
+                    final_floor_schemas[fn] = schema
+                except Exception as schema_err:
+                    logger.error(f"JSON serialization failed for floor {fn}: {schema_err}", exc_info=True)
+                    if fn == (1 if total_floors > 1 else 0):
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"Core floor serialization failed: {str(schema_err)}"
+                        )
+                    final_floor_schemas[fn] = {}
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="The legacy raw SVG format has been deprecated. Please use format=json."
                 )
-                final_floor_svgs[fn] = floor_svg
-            except Exception as svg_err:
-                print(f"⚠️ SVG Render error floor {fn}: {svg_err}")
-                final_floor_svgs[fn] = f"<svg viewBox='0 0 100 100'><text x='5' y='50' font-size='5'>Error rendering floor {fn}</text></svg>"
 
-        # Primary SVG (use 1st floor if multi-story, else ground)
-        if total_floors > 0:
-            svg_blueprint = final_floor_svgs.get(1, final_floor_svgs.get(0, ""))
+        # Primary blueprint selection
+        if format == "json":
+            core_fn = 1 if total_floors > 1 else 0
+            schema_blueprint = final_floor_schemas.get(core_fn, final_floor_schemas.get(0, {}))
+            svg_blueprint = ""
+            print(f"📐 Serializer: {len(final_floor_schemas)} floor schemas generated")
         else:
-            svg_blueprint = final_floor_svgs.get(0, "")
-
-        print(f"📐 Renderer: {len(final_floor_svgs)} floor SVGs generated")
+            svg_blueprint = ""
 
         # ── v3.0: PROPORTION VALIDATOR ─────────────────────────────────────────
         try:
@@ -595,7 +616,6 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
         # ── RESPONSE ──────────────────────────────────────────────────────────
 
         response_data = {
-            "svg": svg_blueprint,
             "seed": layout_seed,
             "vastu_score": vastu_results["score"],
             "vastu_label": vastu_results["label"],
@@ -607,8 +627,7 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
             "rooms_placed": len(placed_rooms),
             "floors_generated": len(all_floor_layouts),
 
-            # Multi-floor layouts & SVGs
-            "floor_svgs": {str(fn): svg for fn, svg in final_floor_svgs.items()},
+            # Multi-floor layouts
             "floor_labels": {str(fn): lbl for fn, lbl in final_labels.items()},
             "all_floor_layouts": {
                 str(fn): rooms for fn, rooms in final_floor_layouts.items()
@@ -654,15 +673,23 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
             "alternative_svg": alternative_svg,
         }
 
+        if format == "json":
+            response_data["floor_plan"] = schema_blueprint
+            response_data["floor_plans"] = {str(fn): schema for fn, schema in final_floor_schemas.items()}
+        else:
+            response_data["svg"] = svg_blueprint
+            response_data["floor_svgs"] = {str(fn): svg for fn, svg in final_floor_svgs.items()}
+
         # Auto-save project for history/gallery
         try:
             project_id = await save_project({
                 "prompt": request_data.prompt,
-                "svg": svg_blueprint,
+                "svg": schema_blueprint if format == "json" else svg_blueprint,
                 "scores": {
                     "vastu": vastu_results["score"],
                     "blueprint_overall": blueprint_score["overall"]
-                }
+                },
+                "owner_id": user_id
             })
             response_data["project_id"] = project_id
             print(f"💾 Auto-saved project: {project_id}")
@@ -675,14 +702,14 @@ async def generate_blueprint_endpoint(request: Request, request_data: GenerateRe
         raise
     except Exception as e:
         import traceback
+        import uuid
+        correlation_id = uuid.uuid4().hex[:8]
         error_trace = traceback.format_exc()
-        print(f"❌ Generation error: {e}")
-        print(f"TRACEBACK:\n{error_trace}")
-        
-        # Log to proper logger
-        logger.error(f"Generation failure: {str(e)}\n{error_trace}")
-        
-        raise HTTPException(status_code=500, detail=f"Server error during generation: {str(e)}")
+        logger.error(f"Generation failure [CID:{correlation_id}]: {str(e)}\n{error_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An unexpected error occurred during blueprint generation. Reference ID: {correlation_id}"
+        )
     finally:
         pass
 

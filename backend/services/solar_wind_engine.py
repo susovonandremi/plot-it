@@ -17,6 +17,8 @@ import logging
 from typing import List, Dict, Any, Optional
 import math
 
+from services.constants import WALL_ADJACENCY_TOL
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,21 +44,30 @@ def calculate_sun_exposure(
         }
     ]
     """
-    TOL = 0.5
+    TOL = WALL_ADJACENCY_TOL
     results = []
+
+    # Find actual physical envelope bounds to support setback offsets
+    physical_rooms = [r for r in placed_rooms if not r.get('is_annotation', False)]
+    if not physical_rooms:
+        physical_rooms = placed_rooms
+    min_x = min(r['x'] for r in physical_rooms) if physical_rooms else 0.0
+    min_y = min(r['y'] for r in physical_rooms) if physical_rooms else 0.0
+    max_x = max(r['x'] + r['width'] for r in physical_rooms) if physical_rooms else plot_width
+    max_y = max(r['y'] + r['height'] for r in physical_rooms) if physical_rooms else plot_height
 
     for room in placed_rooms:
         rx, ry = room['x'], room['y']
         rw, rh = room['width'], room['height']
 
         sides = []
-        if rx <= TOL:
+        if abs(rx - min_x) <= TOL:
             sides.append("W")
-        if abs(rx + rw - plot_width) <= TOL:
+        if abs(rx + rw - max_x) <= TOL:
             sides.append("E")
-        if ry <= TOL:
+        if abs(ry - min_y) <= TOL:
             sides.append("N")
-        if abs(ry + rh - plot_height) <= TOL:
+        if abs(ry + rh - max_y) <= TOL:
             sides.append("S")
 
         # Estimate sun hours based on exposed sides
@@ -116,21 +127,30 @@ def score_ventilation(
         }
     ]
     """
-    TOL = 0.5
+    TOL = WALL_ADJACENCY_TOL
     results = []
+
+    # Find actual physical envelope bounds to support setback offsets
+    physical_rooms = [r for r in placed_rooms if not r.get('is_annotation', False)]
+    if not physical_rooms:
+        physical_rooms = placed_rooms
+    min_x = min(r['x'] for r in physical_rooms) if physical_rooms else 0.0
+    min_y = min(r['y'] for r in physical_rooms) if physical_rooms else 0.0
+    max_x = max(r['x'] + r['width'] for r in physical_rooms) if physical_rooms else plot_width
+    max_y = max(r['y'] + r['height'] for r in physical_rooms) if physical_rooms else plot_height
 
     for room in placed_rooms:
         rx, ry = room['x'], room['y']
         rw, rh = room['width'], room['height']
 
         ext_walls = set()
-        if rx <= TOL:
+        if abs(rx - min_x) <= TOL:
             ext_walls.add("W")
-        if abs(rx + rw - plot_width) <= TOL:
+        if abs(rx + rw - max_x) <= TOL:
             ext_walls.add("E")
-        if ry <= TOL:
+        if abs(ry - min_y) <= TOL:
             ext_walls.add("N")
-        if abs(ry + rh - plot_height) <= TOL:
+        if abs(ry + rh - max_y) <= TOL:
             ext_walls.add("S")
 
         n_ext = len(ext_walls)

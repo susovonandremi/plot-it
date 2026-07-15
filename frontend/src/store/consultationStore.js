@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-const DRAFT_KEY = 'plotai_consultation_draft';
+const DRAFT_KEY = 'plotit_consultation_draft';
 const DRAFT_EXPIRY_HOURS = 24;
 
 const saveToLocalStorage = (state) => {
