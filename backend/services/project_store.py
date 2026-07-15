@@ -3,7 +3,10 @@ import logging
 import json
 import uuid
 import aiosqlite
-import asyncpg
+try:
+    import asyncpg
+except ImportError:
+    asyncpg = None
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
@@ -12,6 +15,12 @@ logger = logging.getLogger(__name__)
 # Determine if we should use PostgreSQL (production/staging) or SQLite (local dev)
 DATABASE_URL = os.getenv("DATABASE_URL")
 IS_POSTGRES = bool(DATABASE_URL and (DATABASE_URL.startswith("postgres://") or DATABASE_URL.startswith("postgresql://")))
+
+if IS_POSTGRES and asyncpg is None:
+    raise ImportError(
+        "PostgreSQL DATABASE_URL is configured, but the 'asyncpg' package is not installed. "
+        "Please install it using 'pip install asyncpg' or unset the DATABASE_URL environment variable."
+    )
 
 # SQLite fallback path configuration
 # Anchor SQLite DB to the absolute path of the backend workspace folder
