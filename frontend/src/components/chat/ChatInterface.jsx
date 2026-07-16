@@ -24,6 +24,7 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
      const isConsultationActive = useConsultationStore(state => state.isConsultationActive);
      const [input, setInput] = useState('');
      const [isSubmitting, setIsSubmitting] = useState(false);
+     const [sessionId] = useState(() => crypto.randomUUID().slice(0, 8).toUpperCase());
      const scrollRef = useRef(null);
      const inputRef = useRef(null);
 
@@ -73,7 +74,7 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
                          <div className="w-2 h-2 rounded-full bg-secondary animate-pulse"></div>
                          <span className="text-label-caps text-on-surface uppercase tracking-widest">Active Session</span>
                     </div>
-                    <span className="text-data-mono text-xs text-on-surface-variant">ID: PLT-9482</span>
+                    <span className="text-data-mono text-xs text-on-surface-variant">ID: PLT-{sessionId}</span>
                </div>
                
                {/* Chat History */}

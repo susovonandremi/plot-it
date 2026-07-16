@@ -93,10 +93,21 @@ def _normalize_type(rtype: str) -> str:
     return aliases.get(t, t)
 
 
-def _get_size_params(nt: str, plot_area: float) -> Dict:
-    """Get min/max w, h in solver units for a room type."""
+def _get_size_params(nt: str, plot_area: float, plot_width: float = 0) -> Dict:
+    """Get min/max w, h in solver units for a room type.
+    
+    For spine types (passage/corridor) on narrow plots (< 25 ft wide),
+    the minimum side is reduced adaptively to prevent the solver from
+    cascading into the emergency strip-fill fallback.
+    """
     defaults = (40, 90, 180, 5.0, 15.0)
     min_a, typ_a, max_a, min_side, max_side = ROOM_SIZES.get(nt, defaults)
+
+    # Adaptive: narrow plots get narrower passage minimums
+    if nt in SPINE_TYPES and plot_width > 0 and plot_width < 25.0:
+        min_side = max(3.0, plot_width * 0.15)  # 15% of plot width, floor 3 ft
+        min_a = int(min_side * 8)  # reasonable min area for narrow passage
+
     return {
         'min_w': max(2, int(min_side * SCALE)),
         'max_w': int(max_side * SCALE),
@@ -209,7 +220,7 @@ class ConstraintSolver:
         for i, room in enumerate(expanded):
             rid = room['id']
             nt = room['normalized_type']
-            sp = _get_size_params(nt, self.plot_area)
+            sp = _get_size_params(nt, self.plot_area, plot_width=self.plot_w / SCALE)
 
             min_w = max(2, int(sp['min_w'] * relax_areas))
             max_w = min(sp['max_w'], self.W)

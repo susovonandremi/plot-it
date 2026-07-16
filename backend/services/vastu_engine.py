@@ -153,9 +153,12 @@ def assign_vastu_zones(rooms: List[Dict[str, Any]]) -> Dict[str, str]:
 def calculate_vastu_score(assignments: Dict[str, str]) -> Dict[str, Any]:
     """
     Calculates the Vastu compliance score based on room ID assignments.
+    Penalties are normalized by room count so complex plans are scored
+    fairly compared to simpler layouts.
     """
-    score = 100
     violations = []
+    total_penalty = 0
+    num_rooms = len(assignments)
     
     for room_id, zone in assignments.items():
         # Derive type from ID (e.g. bedroom_1 -> BEDROOM)
@@ -169,25 +172,23 @@ def calculate_vastu_score(assignments: Dict[str, str]) -> Dict[str, Any]:
             
         # Check Forbidden
         if zone in FORBIDDEN.get(base_type, []):
-            penalty = 20
-            score -= penalty
+            total_penalty += 20
             violations.append(f"FORBIDDEN: {room_id} in {ZONES.get(zone, zone)}")
         
         # Check Avoid
         elif zone in AVOID.get(base_type, []):
-            penalty = 5
-            score -= penalty
+            total_penalty += 5
             violations.append(f"AVOID: {room_id} in {ZONES.get(zone, zone)}")
             
         # Check Preferred
         elif zone not in RULES.get(type_check, []):
             # Non-optimal placement
-            penalty = 5
-            score -= penalty
+            total_penalty += 5
             violations.append(f"NON-OPTIMAL: {room_id} ({type_check}) in {ZONES.get(zone, zone)}")
 
-    # Ensure score is not negative
-    score = max(0, score)
+    # Normalize: max possible penalty = num_rooms * 20 (worst case: every room FORBIDDEN)
+    max_penalty = max(num_rooms * 20, 1)  # avoid division by zero
+    score = max(0, round(100 * (1 - total_penalty / max_penalty)))
     
     # Determine color and label
     if score >= 90:

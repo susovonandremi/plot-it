@@ -3,7 +3,7 @@ import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import {
      ZoomIn, ZoomOut, RotateCcw, Layers, Download, Image as ImageIcon,
      FileText, Code, ChevronDown, Hammer, Ruler, Flame, CheckCircle, AlertTriangle,
-     Bot
+     Bot, Loader2
 } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { jsPDF } from 'jspdf';
@@ -38,6 +38,7 @@ export default function InteractiveCanvas({
      const [showDims, setShowDims] = useState(true);
 
      const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+     const [isExporting, setIsExporting] = useState(false);
      const svgContainerRef = useRef(null);
      // Unique ID per instance — enables side-by-side Compare View without
      // DOM ID collisions or global CSS selector interference.
@@ -99,8 +100,9 @@ export default function InteractiveCanvas({
 
      const handleDownload = async (format) => {
           setShowDownloadMenu(false);
+          setIsExporting(true);
           const svgElement = svgContainerRef.current?.querySelector('svg');
-          if (!svgElement) return;
+          if (!svgElement) { setIsExporting(false); return; }
 
           try {
                const clonedSvg = svgElement.cloneNode(true);
@@ -190,6 +192,8 @@ export default function InteractiveCanvas({
 
           } catch (error) {
                console.error("Export failed:", error);
+          } finally {
+               setIsExporting(false);
           }
      };
 
@@ -214,13 +218,14 @@ export default function InteractiveCanvas({
                               Use the CAD Copilot to generate a property layout, or upload an existing project to begin visualization.
                          </p>
 
-                         {/* Decorative technical lines */}
-                         <div className="mt-12 flex items-center gap-4 opacity-30">
-                              <div className="h-px w-16 bg-gradient-to-r from-transparent to-primary"></div>
-                              <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
-                              <span className="text-label-caps tracking-[0.2em] text-primary">AWAITING INPUT</span>
-                              <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
-                              <div className="h-px w-16 bg-gradient-to-l from-transparent to-primary"></div>
+                         {/* Quick-start hint chips */}
+                         <div className="mt-8 flex flex-col items-center gap-2 max-w-md">
+                              <span className="text-[10px] text-on-surface-variant/50 uppercase tracking-widest mb-1">Try asking the copilot →</span>
+                              <div className="flex flex-wrap justify-center gap-2">
+                                   <span className="text-[11px] px-3 py-1.5 rounded-full border border-primary/20 text-primary/60 bg-primary/5">"3BHK 1200 sqft east-facing"</span>
+                                   <span className="text-[11px] px-3 py-1.5 rounded-full border border-primary/20 text-primary/60 bg-primary/5">"Kerala courtyard villa"</span>
+                                   <span className="text-[11px] px-3 py-1.5 rounded-full border border-primary/20 text-primary/60 bg-primary/5">"2-floor duplex with Vastu"</span>
+                              </div>
                          </div>
                     </div>
                </div>
@@ -294,10 +299,14 @@ export default function InteractiveCanvas({
                     <div className="relative">
                          <button
                               onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                              className="flex items-center gap-2 bg-glass backdrop-blur-md border border-white/10 rounded px-3 py-2 text-sm font-medium text-on-surface hover:bg-white/10 transition-colors shadow-lg"
+                              disabled={isExporting}
+                              className="flex items-center gap-2 bg-glass backdrop-blur-md border border-white/10 rounded px-3 py-2 text-sm font-medium text-on-surface hover:bg-white/10 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                          >
-                              <Download size={16} />
-                              Export
+                              {isExporting ? (
+                                   <><Loader2 size={16} className="animate-spin" /> Exporting...</>
+                              ) : (
+                                   <><Download size={16} /> Export</>
+                              )}
                               <ChevronDown size={14} className={`transition-transform duration-200 ${showDownloadMenu ? 'rotate-180' : ''}`} />
                          </button>
 
