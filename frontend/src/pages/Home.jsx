@@ -200,7 +200,7 @@ export default function Home() {
                          <div className="flex flex-col h-full py-6">
                               {/* Brand Header */}
                               <div className="px-6 pb-6 flex items-center justify-between border-b border-outline-variant/30">
-                                   <div className="flex items-center gap-3">
+                                   <button onClick={handleReset} className="flex items-center gap-3 hover:opacity-80 transition-opacity text-left bg-transparent border-none p-0 outline-none cursor-pointer">
                                         <svg className="w-9 h-9 text-primary shrink-0" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
                                              <path d="M10 20H90M10 40H90M10 60H90M10 80H90M20 10V90M40 10V90M60 10V90M80 10V90" stroke="currentColor" strokeWidth="0.5" strokeOpacity="0.15" strokeDasharray="2 2" />
                                              <rect x="15" y="15" width="70" height="70" rx="2" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.4" />
@@ -213,7 +213,7 @@ export default function Home() {
                                              <span className="text-headline-md font-black tracking-tight text-on-surface font-sans leading-none">Plot<span className="text-primary font-mono font-medium">It</span></span>
                                              <span className="text-[9px] font-data-mono text-on-surface-variant/60 uppercase tracking-widest mt-1">Property Intel</span>
                                         </div>
-                                   </div>
+                                   </button>
                               </div>
                               {/* Navigation Links */}
                               <ul className="flex-1 overflow-y-auto px-4 py-6 space-y-1">

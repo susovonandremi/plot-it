@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConsultationModal from '../ConsultationModal';
-import { Bot, AlertTriangle, Send, Home, Compass } from 'lucide-react';
+import { Bot, AlertTriangle, Send, Home, Compass, SlidersHorizontal } from 'lucide-react';
 import { useConsultationStore } from '../../store/consultationStore';
 
 const stageMap = {
@@ -218,30 +218,37 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
                
                {/* Input Area */}
                <div className="p-4 border-t border-outline-variant bg-surface-container shrink-0">
-                    <div className="relative group">
-                         <div className="absolute -inset-0.5 bg-gradient-to-r from-primary to-secondary rounded-lg blur opacity-20 group-focus-within:opacity-40 transition duration-500"></div>
-                         <div className="relative bg-surface border border-outline-variant rounded-lg flex items-end shadow-inner focus-within:border-primary/50 transition-colors">
-                              <textarea
-                                   ref={inputRef}
-                                   value={input}
-                                   onChange={(e) => setInput(e.target.value)}
-                                   onKeyDown={handleKeyDown}
-                                   disabled={isLoading || isSubmitting || isConsultationActive}
-                                   placeholder={isConsultationActive ? "Consultation active..." : "Command PlotIt..."}
-                                   className="w-full bg-transparent text-body-sm text-on-surface placeholder-on-surface-variant/50 border-none focus:ring-0 resize-none p-3 max-h-32 outline-none disabled:opacity-50"
-                                   rows={2}
-                              />
-                              <div className="p-2">
-                                   <button
-                                        onClick={handleSubmit}
-                                        disabled={isSendDisabled}
-                                        className="w-8 h-8 rounded bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-on-primary transition-colors border border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                                   >
-                                        <Send size={14} />
-                                   </button>
+                    {isConsultationActive ? (
+                         <div className="bg-surface border border-primary/20 rounded-lg p-3.5 flex items-center justify-center gap-2.5 shadow-[inset_0_0_15px_rgba(138,235,255,0.02)] animate-pulse">
+                              <SlidersHorizontal size={14} className="text-primary" />
+                              <span className="text-xs text-primary font-medium tracking-wide">Answering spatial consultation specs above...</span>
+                         </div>
+                    ) : (
+                         <div className="relative group">
+                              <div className="absolute -inset-0.5 bg-gradient-to-r from-primary to-secondary rounded-lg blur opacity-20 group-focus-within:opacity-40 transition duration-500"></div>
+                              <div className="relative bg-surface border border-outline-variant rounded-lg flex items-end shadow-inner focus-within:border-primary/50 transition-colors">
+                                   <textarea
+                                        ref={inputRef}
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        onKeyDown={handleKeyDown}
+                                        disabled={isLoading || isSubmitting}
+                                        placeholder="Command PlotIt..."
+                                        className="w-full bg-transparent text-body-sm text-on-surface placeholder-on-surface-variant/50 border-none focus:ring-0 resize-none p-3 max-h-32 outline-none disabled:opacity-50"
+                                        rows={2}
+                                   />
+                                   <div className="p-2">
+                                        <button
+                                             onClick={handleSubmit}
+                                             disabled={isSendDisabled}
+                                             className="w-8 h-8 rounded bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-on-primary transition-colors border border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                             <Send size={14} />
+                                        </button>
+                                   </div>
                               </div>
                          </div>
-                    </div>
+                    )}
                </div>
           </>
      );

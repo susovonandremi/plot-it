@@ -228,13 +228,36 @@ export default function InteractiveCanvas({
      }
 
      if (!blueprintSvg && isGenerating) {
+          const progressPercent = generationProgress?.progress || 0;
+          const currentStage = generationProgress?.stage || 'parsing';
+          const stageLabelMap = {
+               'parsing': 'Parsing requirements & LLM design inference',
+               'building_program': 'Building room layout configurations',
+               'setbacks': 'Calculating property municipal setbacks',
+               'solving': 'Optimizing rooms layout via CP-SAT solver',
+               'validating': 'Checking vastu zone alignment rules',
+               'rendering': 'Generating detailed architectural blueprint'
+          };
           return (
-               <div className="h-full w-full flex flex-col items-center justify-center text-primary bg-transparent relative z-10">
-                    <div className="w-96 h-64 border-2 border-dashed border-primary/30 rounded-xl flex flex-col items-center justify-center mb-4 p-8 relative overflow-hidden bg-primary/5 backdrop-blur-md shadow-[0_0_20px_rgba(138,235,255,0.1)]">
-                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent -translate-x-[100%] animate-[shimmer_2s_infinite]" />
-                         <Bot size={48} className="text-primary mb-4 animate-pulse" />
-                         <span className="text-xl text-primary font-bold tracking-wide mb-2 drop-shadow-md">Generating Blueprint...</span>
-                         <span className="text-sm text-primary/70 font-light">{generationProgress?.stage ? generationProgress.stage.replace('_', ' ') : 'Processing'}</span>
+               <div className="h-full w-full flex flex-col items-center justify-center text-primary bg-transparent relative z-10 p-6 animate-in fade-in duration-300">
+                    <div className="w-96 h-64 border border-primary/30 rounded-xl flex flex-col items-center justify-center p-8 relative overflow-hidden bg-surface-container-high/80 backdrop-blur-md shadow-[0_0_30px_rgba(138,235,255,0.15)]">
+                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent -translate-x-[100%] animate-[shimmer_2s_infinite]" />
+                         <Bot size={48} className="text-primary mb-4 animate-bounce" />
+                         <span className="text-sm font-bold text-on-surface tracking-wide mb-1">Architectural Solver Active</span>
+                         <span className="text-[11px] text-on-surface-variant/80 font-light text-center mb-6 h-4">
+                              {stageLabelMap[currentStage] || 'Processing layout request...'}
+                         </span>
+                         
+                         {/* Dynamic Progress Bar */}
+                         <div className="w-full h-1.5 bg-surface-variant/50 rounded-full overflow-hidden border border-outline-variant/30 relative mb-2">
+                              <div 
+                                   className="absolute top-0 left-0 h-full bg-primary shadow-[0_0_10px_rgba(138,235,255,0.5)] transition-all duration-300" 
+                                   style={{ width: `${progressPercent}%` }}
+                              />
+                         </div>
+                         <span className="text-[10px] font-data-mono text-primary font-bold">
+                              {Math.round(progressPercent)}% Completed
+                         </span>
                     </div>
                </div>
           );

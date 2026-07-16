@@ -103,6 +103,15 @@ export default function QuestionCard({ question, questionNumber }) {
                                    animationDelay={index * 50}
                               />
                          ))
+                    ) : question.type === 'number' ? (
+                         <input
+                              type="number"
+                              className="w-full max-w-[200px] p-3 border rounded border-outline-variant bg-surface text-on-surface text-xs font-mono placeholder:text-on-surface-variant/40 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-all"
+                              placeholder="e.g. 1200"
+                              value={localAnswer}
+                              onChange={handleTextChange}
+                              autoFocus
+                         />
                     ) : (
                          <textarea
                               className="w-full h-24 p-3 border rounded border-outline-variant bg-surface text-on-surface text-xs font-mono placeholder:text-on-surface-variant/40 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none resize-none transition-all"
