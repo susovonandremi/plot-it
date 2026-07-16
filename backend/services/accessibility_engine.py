@@ -102,8 +102,12 @@ def build_door_graph(
     Builds an adjacency graph from existing doors.
 
     Each door connects two rooms. The graph maps room_id → set of reachable room_ids.
+    Annotation rooms (open terraces, external markers) and non-room targets like
+    'EXTERIOR' are excluded — they are not walkable interior nodes.
     """
-    graph: Dict[str, Set[str]] = {r["id"]: set() for r in placed_rooms}
+    graph: Dict[str, Set[str]] = {
+        r["id"]: set() for r in placed_rooms if not r.get("is_annotation", False)
+    }
 
     for door in doors:
         r1 = door.get("room1_id")

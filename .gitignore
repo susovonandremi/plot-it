@@ -19,6 +19,10 @@ dist-ssr/
 # IDEs
 .vscode/
 .idea/
+.claude/
+
+# Python Cache & Testing
+.pytest_cache/
 
 # OS
 .DS_Store

@@ -17,6 +17,7 @@ logging.basicConfig(
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from dotenv import load_dotenv
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -34,6 +35,13 @@ app = FastAPI(
     description="Natural language to 2D blueprint generator — CP-SAT Solver v4.0",
     version="4.0.0"
 )
+
+# 0. Trust proxy headers (X-Forwarded-For / X-Forwarded-Proto) so slowapi's
+# get_remote_address sees the real client IP behind a load balancer instead of
+# bucketing every user under the LB's IP. FORWARDED_ALLOW_IPS restricts which
+# upstream proxies may set these headers (default: localhost only).
+forwarded_allow_ips = os.getenv("FORWARDED_ALLOW_IPS", "127.0.0.1")
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=forwarded_allow_ips)
 
 # 1. Configure CORS (ABSOLUTE TOP to handle cross-origin preflight SUCCESS)
 allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "")
@@ -53,13 +61,40 @@ app.add_middleware(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# 3. 10KB Request Body Limit Middleware (placed below CORS to avoid preflight issues)
+# 3. Request Body Limit Middleware (placed below CORS to avoid preflight issues)
+# 5MB limit to support layout diffing payloads (previous_layout can be large).
+# Counts actual streamed bytes rather than trusting Content-Length alone, so
+# chunked transfer encoding cannot bypass the limit.
+MAX_BODY_SIZE = 5 * 1024 * 1024  # 5MB
+
 @app.middleware("http")
 async def limit_body_size(request: Request, call_next):
+    # Fast path: reject oversized declared bodies without reading them
     content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > 51200:
-        return JSONResponse(status_code=413, content={"detail": "Payload Too Large: maximum allowed size is 50KB"})
-    return await call_next(request)
+    if content_length and int(content_length) > MAX_BODY_SIZE:
+        return JSONResponse(status_code=413, content={"detail": "Payload Too Large: maximum allowed size is 5MB"})
+
+    # Slow path: enforce the limit on the actual byte stream (covers chunked encoding)
+    received = 0
+    original_receive = request.receive
+    exceeded = False
+
+    async def limited_receive():
+        nonlocal received, exceeded
+        message = await original_receive()
+        if message["type"] == "http.request":
+            received += len(message.get("body", b""))
+            if received > MAX_BODY_SIZE:
+                exceeded = True
+                # Truncate the stream so downstream handlers stop consuming
+                return {"type": "http.request", "body": b"", "more_body": False}
+        return message
+
+    request._receive = limited_receive
+    response = await call_next(request)
+    if exceeded:
+        return JSONResponse(status_code=413, content={"detail": "Payload Too Large: maximum allowed size is 5MB"})
+    return response
 
 # Register routes
 app.include_router(parse.router, prefix="/api/v1")

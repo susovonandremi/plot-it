@@ -12,6 +12,12 @@ security = HTTPBearer(auto_error=False)
 
 JWKS_URL = os.getenv("CLERK_JWKS_URL") or "https://api.clerk.com/v1/jwks"
 CLERK_SECRET_KEY = os.getenv("CLERK_SECRET_KEY")
+# Issuer/audience for strict JWT validation. Issuer is the Clerk frontend API
+# URL (e.g. https://your-app.clerk.accounts.dev). Audience is optional because
+# standard Clerk session tokens do not carry an `aud` claim unless a JWT
+# template sets one.
+CLERK_JWT_ISSUER = os.getenv("CLERK_JWT_ISSUER")
+CLERK_JWT_AUDIENCE = os.getenv("CLERK_JWT_AUDIENCE")
 
 _jwks_cache = None
 
@@ -61,24 +67,37 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
         if not public_key:
             raise HTTPException(status_code=401, detail="Invalid token signing key")
 
-        # Verify JWT (audience validation is off by default for generic Clerk keys, but signature & exp are verified)
-        payload = jwt.decode(
-            token,
-            public_key,
-            algorithms=["RS256"],
-            options={"verify_aud": False, "verify_iss": False}
-        )
+        # Verify JWT: signature & exp always; issuer/audience strictly enforced
+        # when configured via CLERK_JWT_ISSUER / CLERK_JWT_AUDIENCE.
+        decode_kwargs = {
+            "algorithms": ["RS256"],
+            "options": {
+                "verify_iss": bool(CLERK_JWT_ISSUER),
+                "verify_aud": bool(CLERK_JWT_AUDIENCE),
+            },
+        }
+        if CLERK_JWT_ISSUER:
+            decode_kwargs["issuer"] = CLERK_JWT_ISSUER
+        if CLERK_JWT_AUDIENCE:
+            decode_kwargs["audience"] = CLERK_JWT_AUDIENCE
+        payload = jwt.decode(token, public_key, **decode_kwargs)
         
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(status_code=401, detail="Token missing subject claim")
         return user_id
 
+    except HTTPException:
+        raise
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Authentication token has expired")
+    except jwt.InvalidIssuerError:
+        raise HTTPException(status_code=401, detail="Invalid token issuer")
+    except jwt.InvalidAudienceError:
+        raise HTTPException(status_code=401, detail="Invalid token audience")
     except Exception as e:
         logger.error(f"JWT verification failed: {e}")
-        raise HTTPException(status_code=401, detail=f"Invalid authentication token: {str(e)}")
+        raise HTTPException(status_code=401, detail="Invalid authentication token")
 
 async def require_user(user_id: str = Depends(get_current_user)) -> str:
     """

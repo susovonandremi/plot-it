@@ -4,11 +4,13 @@ import json
 import uuid
 import aiosqlite
 try:
+    # pyrefly: ignore [missing-import]
     import asyncpg
 except ImportError:
     asyncpg = None
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
+from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
@@ -27,17 +29,21 @@ if IS_POSTGRES and asyncpg is None:
 backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_FILE = os.path.join(backend_dir, "plotit_projects.db")
 
+@asynccontextmanager
 async def get_db_connection():
     """
-    Returns a connected SQLite database with WAL and busy timeout configured.
+    Returns a context-managed connected SQLite database with WAL and busy timeout configured.
     Only called when not using PostgreSQL.
     """
     db = await aiosqlite.connect(DB_FILE)
-    # Enable Write-Ahead Logging (WAL) for concurrency
-    await db.execute("PRAGMA journal_mode=WAL;")
-    # Set busy timeout to 5000ms to resolve lockups
-    await db.execute("PRAGMA busy_timeout=5000;")
-    return db
+    try:
+        # Enable Write-Ahead Logging (WAL) for concurrency
+        await db.execute("PRAGMA journal_mode=WAL;")
+        # Set busy timeout to 5000ms to resolve lockups
+        await db.execute("PRAGMA busy_timeout=5000;")
+        yield db
+    finally:
+        await db.close()
 
 async def init_db():
     """Initializes the database schema and performs lightweight migrations if necessary."""
@@ -66,7 +72,7 @@ async def init_db():
         await conn.close()
     else:
         logger.info(f"Initializing SQLite database at: {DB_FILE}")
-        async with await get_db_connection() as db:
+        async with get_db_connection() as db:
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS projects (
                     id TEXT PRIMARY KEY,
@@ -118,7 +124,7 @@ async def save_project(project: Dict[str, Any]) -> str:
         """, project_id, name, prompt, svg, scores, created_at, owner_id)
         await conn.close()
     else:
-        async with await get_db_connection() as db:
+        async with get_db_connection() as db:
             await db.execute("""
                 INSERT OR REPLACE INTO projects (id, name, prompt, svg, scores, created_at, owner_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -145,7 +151,7 @@ async def list_projects(owner_id: str = "anonymous", limit: int = 20) -> List[Di
             projects.append(proj)
         return projects
     else:
-        async with await get_db_connection() as db:
+        async with get_db_connection() as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT id, name, prompt, scores, created_at, owner_id FROM projects WHERE owner_id = ? ORDER BY created_at DESC LIMIT ?", 
@@ -175,7 +181,7 @@ async def get_project(project_id: str) -> Optional[Dict[str, Any]]:
             return proj
         return None
     else:
-        async with await get_db_connection() as db:
+        async with get_db_connection() as db:
             db.row_factory = aiosqlite.Row
             async with db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)) as cursor:
                 row = await cursor.fetchone()
@@ -196,7 +202,7 @@ async def delete_project(project_id: str) -> bool:
         # status usually returns 'DELETE 1' or similar
         return " 0" not in status and "DELETE 0" not in status
     else:
-        async with await get_db_connection() as db:
+        async with get_db_connection() as db:
             cursor = await db.execute("DELETE FROM projects WHERE id = ?", (project_id,))
             await db.commit()
             return cursor.rowcount > 0

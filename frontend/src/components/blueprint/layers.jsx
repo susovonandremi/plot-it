@@ -86,9 +86,10 @@ export function RoomLayer({ rooms = [], unitSystem, visible = true }) {
 }
 
 export function WallLayer({ walls, visible = true }) {
-  if (!visible) return null;
+  if (!visible || !walls) return null;
 
-  const dPath = wktToSvgPath(walls.boundary_polygon_wkt);
+  const dPath = wktToSvgPath(walls?.boundary_polygon_wkt);
+  if (!dPath) return null;
 
   return (
     <g data-layer="walls" className="layer-walls">
@@ -109,16 +110,19 @@ export function DoorLayer({ doors = [], visible = true }) {
 
   return (
     <g data-layer="doors" className="layer-doors">
-      {doors.map((door) => (
-        <DoorSymbol
-          key={door.id}
-          x={door.position.x}
-          y={door.position.y}
-          width={door.width_ft}
-          orientation={door.orientation}
-          doorType={door.door_type}
-        />
-      ))}
+      {doors.map((door) => {
+        if (!door?.position) return null;
+        return (
+          <DoorSymbol
+            key={door.id}
+            x={door.position.x ?? 0}
+            y={door.position.y ?? 0}
+            width={door.width_ft ?? 3}
+            orientation={door.orientation ?? 'horizontal'}
+            doorType={door.door_type ?? 'internal'}
+          />
+        );
+      })}
     </g>
   );
 }
@@ -128,15 +132,18 @@ export function WindowLayer({ windows = [], visible = true }) {
 
   return (
     <g data-layer="windows" className="layer-windows">
-      {windows.map((win) => (
-        <WindowSymbol
-          key={win.id}
-          x={win.position.x}
-          y={win.position.y}
-          width={win.width_ft}
-          orientation={win.orientation}
-        />
-      ))}
+      {windows.map((win) => {
+        if (!win?.position) return null;
+        return (
+          <WindowSymbol
+            key={win.id}
+            x={win.position.x ?? 0}
+            y={win.position.y ?? 0}
+            width={win.width_ft ?? 4}
+            orientation={win.orientation ?? 'horizontal'}
+          />
+        );
+      })}
     </g>
   );
 }
@@ -259,14 +266,15 @@ export function FurnitureLayer({ furniture = [], visible = true }) {
   return (
     <g data-layer="furniture" className="layer-furniture">
       {furniture.map((furn) => {
+        if (!furn || furn.x == null || furn.y == null) return null;
         const fx = ftToPx(furn.x);
         const fy = ftToPx(furn.y);
-        const fw = furn.width * SCALE;
-        const fh = furn.height * SCALE;
+        const fw = (furn.width ?? 1) * SCALE;
+        const fh = (furn.height ?? 1) * SCALE;
 
         // Simplified CAD representation of furniture blocks
         return (
-          <g key={furn.id} transform={`rotate(${furn.rotation_deg}, ${fx + fw/2}, ${fy + fh/2})`}>
+          <g key={furn.id} transform={`rotate(${furn.rotation_deg ?? 0}, ${fx + fw/2}, ${fy + fh/2})`}>
             {/* Outer box of the furniture item */}
             <rect
               x={fx}
@@ -288,7 +296,7 @@ export function FurnitureLayer({ furniture = [], visible = true }) {
               fill={DIM_COLOR}
               opacity={0.6}
             >
-              {furn.label}
+              {furn.label ?? ''}
             </text>
           </g>
         );
@@ -413,14 +421,19 @@ export function DimensionLayer({ dimensionChains, visible = true }) {
 }
 
 export function AnnotationLayer({ schema, visible = true }) {
-  if (!visible || !schema || !schema.metadata) return null;
+  if (!visible || !schema?.metadata) return null;
 
-  const { metadata, site_context } = schema;
-  const { plot_width_ft, plot_height_ft, floor_label, vastu_score } = metadata;
+  const { metadata } = schema;
+  const plot_width_ft = metadata?.plot_width_ft ?? 0;
+  const plot_height_ft = metadata?.plot_height_ft ?? 0;
+  const floor_label = metadata?.floor_label ?? 'FLOOR PLAN';
+  const vastu_score = metadata?.vastu_score ?? {};
   
   const w = plot_width_ft * SCALE + 2 * PADDING;
   const h = plot_height_ft * SCALE + 2 * PADDING + 120;
   const blockY = h - 90;
+
+  const vastuValue = vastu_score?.overall ?? vastu_score?.score ?? 0;
 
   return (
     <g data-layer="annotations" className="layer-annotations">
@@ -486,7 +499,7 @@ export function AnnotationLayer({ schema, visible = true }) {
           fontWeight="bold"
           fill={INK_COLOR}
         >
-          {`Vastu Compliance: ${vastu_score.overall || vastu_score.score || 0}%`}
+          {`Vastu Compliance: ${vastuValue}%`}
         </text>
       </g>
     </g>

@@ -5,6 +5,7 @@ import {
   RoomLayer, WallLayer, DoorLayer, WindowLayer, LabelLayer, 
   StructuralLayer, FixtureLayer, FurnitureLayer, DimensionLayer, AnnotationLayer 
 } from './layers';
+import LayerErrorBoundary from './LayerErrorBoundary';
 
 export default function BlueprintRenderer({ 
   schema, 
@@ -54,64 +55,84 @@ export default function BlueprintRenderer({
       </defs>
 
       {/* Layer 1: Pastel Room Polygons */}
-      <RoomLayer 
-        rooms={schema.rooms} 
-        unitSystem={schema.metadata.unit_system} 
-        visible={visibility.rooms} 
-      />
+      <LayerErrorBoundary layerName="rooms">
+        <RoomLayer 
+          rooms={schema.rooms} 
+          unitSystem={schema.metadata?.unit_system} 
+          visible={visibility.rooms} 
+        />
+      </LayerErrorBoundary>
 
       {/* Layer 2: Fixtures (WC, Washbasin, Kitchen Counter) */}
-      <FixtureLayer 
-        fixtures={schema.fixtures || []} 
-        visible={visibility.fixtures} 
-      />
+      <LayerErrorBoundary layerName="fixtures">
+        <FixtureLayer 
+          fixtures={schema.fixtures || []} 
+          visible={visibility.fixtures} 
+        />
+      </LayerErrorBoundary>
 
       {/* Layer 3: Furnishings */}
-      <FurnitureLayer 
-        furniture={schema.furniture || []} 
-        visible={visibility.furniture} 
-      />
+      <LayerErrorBoundary layerName="furniture">
+        <FurnitureLayer 
+          furniture={schema.furniture || []} 
+          visible={visibility.furniture} 
+        />
+      </LayerErrorBoundary>
 
       {/* Layer 4: Master Wall Boundary Path */}
-      <WallLayer 
-        walls={schema.walls} 
-        visible={visibility.walls} 
-      />
+      <LayerErrorBoundary layerName="walls">
+        <WallLayer 
+          walls={schema.walls} 
+          visible={visibility.walls} 
+        />
+      </LayerErrorBoundary>
 
       {/* Layer 5: Openings (Doors and Windows) */}
-      <DoorLayer 
-        doors={schema.doors || []} 
-        visible={visibility.doors} 
-      />
-      <WindowLayer 
-        windows={schema.windows || []} 
-        visible={visibility.windows} 
-      />
+      <LayerErrorBoundary layerName="doors">
+        <DoorLayer 
+          doors={schema.doors || []} 
+          visible={visibility.doors} 
+        />
+      </LayerErrorBoundary>
+      <LayerErrorBoundary layerName="windows">
+        <WindowLayer 
+          windows={schema.windows || []} 
+          visible={visibility.windows} 
+        />
+      </LayerErrorBoundary>
 
       {/* Layer 6: Structural RCC frame */}
-      <StructuralLayer 
-        structural={schema.structural} 
-        visible={visibility.structural} 
-      />
+      <LayerErrorBoundary layerName="structural">
+        <StructuralLayer 
+          structural={schema.structural} 
+          visible={visibility.structural} 
+        />
+      </LayerErrorBoundary>
 
       {/* Layer 7: Text Labels (Room Name + dimensions) */}
-      <LabelLayer 
-        rooms={schema.rooms} 
-        unitSystem={schema.metadata.unit_system} 
-        visible={visibility.labels} 
-      />
+      <LayerErrorBoundary layerName="labels">
+        <LabelLayer 
+          rooms={schema.rooms} 
+          unitSystem={schema.metadata?.unit_system} 
+          visible={visibility.labels} 
+        />
+      </LayerErrorBoundary>
 
       {/* Layer 8: Exterior CAD dimension chains */}
-      <DimensionLayer 
-        dimensionChains={schema.dimension_chains} 
-        visible={visibility.dimensions} 
-      />
+      <LayerErrorBoundary layerName="dimensions">
+        <DimensionLayer 
+          dimensionChains={schema.dimension_chains} 
+          visible={visibility.dimensions} 
+        />
+      </LayerErrorBoundary>
 
       {/* Layer 9: Legend, Compass, North Arrow, and Title block */}
-      <AnnotationLayer 
-        schema={schema} 
-        visible={visibility.annotations} 
-      />
+      <LayerErrorBoundary layerName="annotations">
+        <AnnotationLayer 
+          schema={schema} 
+          visible={visibility.annotations} 
+        />
+      </LayerErrorBoundary>
     </svg>
   );
 }

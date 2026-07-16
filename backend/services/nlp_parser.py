@@ -162,7 +162,20 @@ def parse_prompt(user_prompt: str) -> dict:
     NOW DETECTS incomplete input and triggers consultation mode.
     """
     if not is_llm_configured():
-        raise ValueError("GROQ_API_KEY is not configured. Please set a valid API key in environment variables.")
+        # Graceful degradation: no LLM key means we cannot extract structure.
+        # Return an incomplete parse that triggers consultation mode (HTTP 200)
+        # instead of raising — the consultation questions have a hardcoded fallback.
+        logger.warning("GROQ_API_KEY is not configured — degrading /parse to consultation mode.")
+        parsed = {
+            "plot_size_sqft": None, "rooms": [], "is_complete": False,
+            "missing_info": ["llm_not_configured"],
+            "original_unit_system": detect_unit_system(user_prompt),
+        }
+        parsed["consultation"] = {
+            "needed": True,
+            "questions": generate_consultation_questions(parsed)
+        }
+        return parsed
 
     system_prompt = """
     You are an architectural assistant. Extract features from the prompt.
@@ -348,8 +361,6 @@ def generate_consultation_questions(parsed_data: dict) -> list:
     """
     Generates 4-6 strategic questions based on what info is missing.
     """
-    if not is_llm_configured():
-        raise ValueError("GROQ_API_KEY is not configured.")
     plot_size = parsed_data.get("plot_size_sqft", 0) or 0
     orientation = parsed_data.get("orientation", "unknown")
     missing = parsed_data.get("missing_info", [])
@@ -397,6 +408,9 @@ def generate_consultation_questions(parsed_data: dict) -> list:
     }
     
     try:
+        if not is_llm_configured():
+            # Skip the LLM call entirely — use the hardcoded fallback below.
+            raise ValueError("GROQ_API_KEY is not configured; using fallback questions.")
         response = requests.post(GROQ_URL, json=payload, headers=headers, timeout=10.0)
         response.raise_for_status()
         raw_text = response.json()["choices"][0]["message"]["content"]
@@ -451,8 +465,6 @@ def analyze_consultation_answers(plot_data: dict, answers: dict) -> dict:
     """
     Takes user's consultation answers and returns recommended room list.
     """
-    if not is_llm_configured():
-        raise ValueError("GROQ_API_KEY is not configured.")
     plot_size = plot_data.get("plot_size_sqft") or 0
     if isinstance(plot_size, str):
         try:
@@ -462,6 +474,53 @@ def analyze_consultation_answers(plot_data: dict, answers: dict) -> dict:
     plot_size = float(plot_size) if plot_size else 0
     orientation = plot_data.get("orientation", "unknown") or "unknown"
     
+    # Pre-calculate tailored fallback based on plot size
+    if plot_size >= 2500:
+        fallback_rooms = [
+            {"type": "Master Bedroom", "count": 2, "reasoning": "South-West master suites for head of household"},
+            {"type": "Bedroom", "count": 2, "reasoning": "Additional bedrooms for children and guests"},
+            {"type": "Kitchen", "count": 1, "reasoning": "South-East (Agni) corner kitchen"},
+            {"type": "Living Room", "count": 1, "reasoning": "East/North-East living zone for social gathering"},
+            {"type": "Dining Room", "count": 1, "reasoning": "West/South-West dining area adjacent to kitchen"},
+            {"type": "Bathroom", "count": 3, "reasoning": "Common and attached bathrooms in North-West"},
+            {"type": "Pooja Room", "count": 1, "reasoning": "North-East (Ishanya) corner sacred space"},
+        ]
+        total_rooms = 11
+        usage = "84% of available space"
+        vastu = "Excellent (92%)"
+    elif plot_size >= 1500:
+        fallback_rooms = [
+            {"type": "Master Bedroom", "count": 1, "reasoning": "South-West master suite"},
+            {"type": "Bedroom", "count": 2, "reasoning": "Additional bedrooms in North/West"},
+            {"type": "Kitchen", "count": 1, "reasoning": "South-East kitchen quadrant"},
+            {"type": "Living Room", "count": 1, "reasoning": "Spacious social zone in North/East"},
+            {"type": "Dining Room", "count": 1, "reasoning": "Dining space adjacent to kitchen"},
+            {"type": "Bathroom", "count": 2, "reasoning": "Properly ventilated sanitation spaces"},
+            {"type": "Pooja Room", "count": 1, "reasoning": "North-East corner pooja area"},
+        ]
+        total_rooms = 9
+        usage = "81% of available space"
+        vastu = "Excellent (95%)"
+    elif plot_size >= 800:
+        fallback_rooms = [
+            {"type": "Bedroom", "count": 2, "reasoning": "Standard bedrooms for a small family layout"},
+            {"type": "Kitchen", "count": 1, "reasoning": "Functional kitchen in the South-East corner"},
+            {"type": "Living Room", "count": 1, "reasoning": "Central social and entry zone"},
+            {"type": "Bathroom", "count": 1, "reasoning": "Common bathroom with exterior ventilation"},
+        ]
+        total_rooms = 5
+        usage = "75% of available space"
+        vastu = "Good (85%)"
+    else:
+        fallback_rooms = [
+            {"type": "Bedroom", "count": 1, "reasoning": "Compact bedroom optimized for space"},
+            {"type": "Kitchen", "count": 1, "reasoning": "Cozy single wall kitchen layout"},
+            {"type": "Bathroom", "count": 1, "reasoning": "Combined bath and sanitation space"},
+        ]
+        total_rooms = 3
+        usage = "70% of available space"
+        vastu = "Average (70%)"
+
     context = f"""
     User has a {plot_size if plot_size > 0 else 1200} sqft {orientation}-facing plot.
     Answers: {json.dumps(answers)}
@@ -493,6 +552,8 @@ def analyze_consultation_answers(plot_data: dict, answers: dict) -> dict:
     }
     
     try:
+        if not is_llm_configured():
+            raise ValueError("GROQ_API_KEY is not configured.")
         response = requests.post(GROQ_URL, json=payload, headers=headers, timeout=10.0)
         response.raise_for_status()
         raw_text = response.json()["choices"][0]["message"]["content"]
@@ -514,15 +575,9 @@ def analyze_consultation_answers(plot_data: dict, answers: dict) -> dict:
         logger.info(f"Error analyzing answers: {e}")
         # Return a proper fallback so frontend can render
         return {
-            "recommended_rooms": [
-                {"type": "Bedroom", "count": 2, "reasoning": "Standard bedrooms for residential use"},
-                {"type": "Kitchen", "count": 1, "reasoning": "Central kitchen area"},
-                {"type": "Bathroom", "count": 2, "reasoning": "Attached and common bathrooms"},
-                {"type": "Living Room", "count": 1, "reasoning": "Open living space"},
-                {"type": "Dining Room", "count": 1, "reasoning": "Dedicated dining area"},
-            ],
+            "recommended_rooms": fallback_rooms,
             "plot_size_sqft": plot_size if plot_size and plot_size > 0 else 1200,
-            "total_rooms": 7,
-            "estimated_usage": "78% of available space",
-            "vastu_preview": "Good (80%)"
+            "total_rooms": total_rooms,
+            "estimated_usage": usage,
+            "vastu_preview": vastu
         }

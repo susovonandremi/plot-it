@@ -59,17 +59,39 @@ def assign_vastu_zones(rooms: List[Dict[str, Any]]) -> Dict[str, str]:
     """
     assignments = {}
     
-    # 1. Expand rooms into instances for assignment
+    # 1. Expand rooms into instances for assignment.
+    # IMPORTANT: If rooms already carry an 'id' (set by BuildingProgram.get_floor_program),
+    # we MUST use it verbatim so that downstream consumers (CP-SAT solver, heatmap,
+    # accessibility engine) all share a single canonical ID namespace.
     instances = []
     for config in rooms:
         count = int(config.get('count') or 1)
         base_type = (config.get('type', '') or '').upper().replace(" ", "_")
         if not base_type:
             continue
-        
+
+        # Normalizer matching building_program.py's _normalize_type
+        def _norm_for_id(rtype: str) -> str:
+            t = rtype.lower().strip().replace(' ', '_').replace('_room', '')
+            aliases = {
+                'bed_room': 'bedroom', 'bath_room': 'bathroom',
+                'living_room': 'living', 'dining_room': 'dining',
+                'wash_room': 'bathroom', 'wc': 'toilet',
+                'stairs': 'staircase', 'corridor': 'passage',
+                'hall': 'living', 'elevator': 'lift',
+                'porch': 'verandah', 'prayer': 'pooja', 'mandir': 'pooja',
+            }
+            return aliases.get(t, t)
+
         for i in range(count):
-            room_id = config.get('id', f"{config['type']}_{i+1}")
-            
+            # Use pre-assigned canonical ID if present; generate fallback only
+            # when the room dict comes from raw user input (no 'id' key).
+            if 'id' in config and count == 1:
+                room_id = config['id']
+            else:
+                nt = _norm_for_id(config.get('type', ''))
+                room_id = f"{nt}_{i}"
+
             # Special handling for Master Bedroom: first bedroom is Master
             normalized_type = base_type
             if base_type == "BEDROOM" and i == 0:

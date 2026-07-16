@@ -26,72 +26,83 @@ export const generateBlueprint = async (requestData) => {
 
 export const generateBlueprintStream = (requestData, onMessage) => {
      let ws = null;
-     let timeoutId = null;
+     let heartbeatTimer = null;
+     let didComplete = false;
+     let didSettle = false; // true once promise resolved or rejected
+
+     // Heartbeat: if no message arrives for HEARTBEAT_MS, assume stall
+     const HEARTBEAT_MS = 15000;
 
      const promise = new Promise((resolve, reject) => {
+          const settle = (fn, value) => {
+               if (didSettle) return;
+               didSettle = true;
+               clearTimeout(heartbeatTimer);
+               fn(value);
+          };
+
+          const resetHeartbeat = () => {
+               clearTimeout(heartbeatTimer);
+               heartbeatTimer = setTimeout(() => {
+                    console.warn("WebSocket heartbeat timeout — no message for 15s.");
+                    try { ws?.close(); } catch (_) {}
+                    settle(reject, new Error("WebSocket stream timed out (no heartbeat for 15 seconds)"));
+               }, HEARTBEAT_MS);
+          };
+
           const wsUrl = API_BASE_URL.replace(/^http/, 'ws') + '/api/v1/stream/generate';
           ws = new WebSocket(wsUrl);
 
-          timeoutId = setTimeout(() => {
-               console.warn("WebSocket generation stream timed out.");
-               if (ws) {
-                    try {
-                         ws.close();
-                    } catch (e) {}
-               }
-               reject(new Error("WebSocket stream timed out after 30 seconds"));
-          }, 30000);
-
           ws.onopen = () => {
                ws.send(JSON.stringify(requestData));
+               resetHeartbeat();
           };
 
           ws.onmessage = (event) => {
+               resetHeartbeat();
                try {
                     const { event: eventName, data } = JSON.parse(event.data);
                     onMessage(eventName, data);
                     if (eventName === 'complete') {
-                         clearTimeout(timeoutId);
-                         resolve(data);
-                         try {
-                              ws.close();
-                         } catch (e) {}
+                         didComplete = true;
+                         settle(resolve, data);
+                         try { ws.close(); } catch (_) {}
                     }
                     if (eventName === 'error') {
-                         clearTimeout(timeoutId);
-                         reject(new Error(data.message));
-                         try {
-                              ws.close();
-                         } catch (e) {}
+                         settle(reject, new Error(data?.message || 'Stream error'));
+                         try { ws.close(); } catch (_) {}
                     }
                } catch (e) {
                     console.error("Error parsing WS message", e);
                }
           };
 
-          ws.onerror = (event) => {
-               clearTimeout(timeoutId);
-               reject(new Error("WebSocket connection failed. Check that the backend server is running on " + wsUrl));
+          ws.onerror = () => {
+               settle(reject, new Error("WebSocket connection failed. Check that the backend server is running on " + wsUrl));
           };
           
           ws.onclose = (event) => {
-               clearTimeout(timeoutId);
-               if (event.code !== 1000 && event.code !== 1005) {
-                    reject(new Error(`WebSocket closed unexpectedly (code ${event.code}): ${event.reason || 'No reason provided'}`));
+               clearTimeout(heartbeatTimer);
+               // If the server closed cleanly but never sent 'complete',
+               // reject so the REST fallback in Home.jsx kicks in.
+               if (!didComplete && !didSettle) {
+                    settle(reject, new Error(
+                         event.code !== 1000 && event.code !== 1005
+                              ? `WebSocket closed unexpectedly (code ${event.code}): ${event.reason || 'No reason provided'}`
+                              : 'WebSocket closed without sending completion event'
+                    ));
                }
           };
      });
 
      const abort = () => {
-          clearTimeout(timeoutId);
+          clearTimeout(heartbeatTimer);
           if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
-               try {
-                    ws.close();
-               } catch (e) {}
+               try { ws.close(); } catch (_) {}
           }
      };
 
-     return { promise, abort };
+     return { promise, abort, get didComplete() { return didComplete; } };
 };
 
 export const recommendRooms = async (plotData, answers) => {

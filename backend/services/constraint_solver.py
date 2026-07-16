@@ -108,7 +108,12 @@ def _get_size_params(nt: str, plot_area: float) -> Dict:
 
 
 def _expand_rooms(rooms: List[Dict]) -> List[Dict]:
-    """Expand rooms with count > 1 into individual entries."""
+    """Expand rooms with count > 1 into individual entries.
+    
+    Preserves canonical IDs assigned by BuildingProgram.get_floor_program()
+    when count == 1 and the room already has an 'id'. Only generates new IDs
+    for expanded duplicates or rooms missing an ID.
+    """
     expanded = []
     for r in rooms:
         count = int(r.get('count', 1) or 1)
@@ -116,7 +121,10 @@ def _expand_rooms(rooms: List[Dict]) -> List[Dict]:
             entry = dict(r)
             nt = _normalize_type(r.get('type', 'room'))
             entry['normalized_type'] = nt
-            if 'id' not in entry or count > 1:
+            # Preserve canonical ID when not expanding (count==1 and id exists)
+            if count == 1 and 'id' in r:
+                pass  # keep existing entry['id']
+            else:
                 entry['id'] = f"{nt}_{len(expanded)}"
             entry.pop('count', None)
             expanded.append(entry)
@@ -610,8 +618,10 @@ class ConstraintSolver:
         if random_seed is not None:
             solver.parameters.random_seed = random_seed
             solver.parameters.num_search_workers = 1
+            # Guarantee determinism by capping search complexity deterministically (independent of CPU speed)
+            solver.parameters.max_deterministic_time = 1.0
         else:
-            solver.parameters.num_workers = 4
+            solver.parameters.num_search_workers = 4
 
         t0 = time.perf_counter()
         status = solver.Solve(model)

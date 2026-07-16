@@ -87,6 +87,9 @@ export default function Home() {
                 setChatHistory(prev => [...prev, { role: 'assistant', content: `Done! Here is your ${plot_size} sqft plan.` }]);
            } catch (err) {
                 console.warn("WebSocket streaming failed, attempting REST fallback...", err);
+                // Reset progress so the user doesn't see a stale percentage
+                setGenerationProgress({ progress: 0, stage: 'fallback' });
+                setChatHistory(prev => [...prev, { role: 'system', content: "Streaming timed out — falling back to standard generation..." }]);
                 try {
                      const fallbackData = await generateBlueprint({
                           plot_size_sqft: plot_size,
