@@ -2,9 +2,32 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
+const api = axios.create({
+     baseURL: API_BASE_URL
+});
+
+let getTokenFn = null;
+export const setAuthTokenGetter = (fn) => {
+     getTokenFn = fn;
+};
+
+api.interceptors.request.use(async (config) => {
+     if (getTokenFn) {
+          try {
+               const token = await getTokenFn();
+               if (token) {
+                    config.headers.Authorization = `Bearer ${token}`;
+               }
+          } catch (e) {
+               console.error("Failed to get auth token:", e);
+          }
+     }
+     return config;
+});
+
 export const parsePrompt = async (prompt) => {
      try {
-          const response = await axios.post(`${API_BASE_URL}/api/v1/parse`, { prompt });
+          const response = await api.post(`/api/v1/parse`, { prompt });
           return response.data.data;
      } catch (error) {
           console.error("Error parsing prompt:", error);
@@ -16,7 +39,7 @@ export const generateBlueprint = async (requestData) => {
      try {
           // requestData should match GenerateRequest schema:
           // { plot_size_sqft, floors, rooms, user_tier, original_unit_system }
-          const response = await axios.post(`${API_BASE_URL}/api/v1/generate`, requestData);
+          const response = await api.post(`/api/v1/generate`, requestData);
           return response.data.data;
      } catch (error) {
           console.error("Error generating blueprint:", error);
@@ -53,8 +76,20 @@ export const generateBlueprintStream = (requestData, onMessage) => {
           const wsUrl = API_BASE_URL.replace(/^http/, 'ws') + '/api/v1/stream/generate';
           ws = new WebSocket(wsUrl);
 
-          ws.onopen = () => {
-               ws.send(JSON.stringify(requestData));
+          ws.onopen = async () => {
+               // Append token if available
+               let payload = { ...requestData };
+               if (getTokenFn) {
+                    try {
+                         const token = await getTokenFn();
+                         if (token) {
+                              payload.token = token; // Add token directly to message payload for WS authentication
+                         }
+                    } catch (e) {
+                         console.error("WS auth token retrieval failed:", e);
+                    }
+               }
+               ws.send(JSON.stringify(payload));
                resetHeartbeat();
           };
 
@@ -107,7 +142,7 @@ export const generateBlueprintStream = (requestData, onMessage) => {
 
 export const recommendRooms = async (plotData, answers) => {
      try {
-          const response = await axios.post(`${API_BASE_URL}/api/v1/consultation/recommend`, {
+          const response = await api.post(`/api/v1/consultation/recommend`, {
                plot_size_sqft: plotData.plot_size_sqft,
                plot_width_ft: plotData.plot_width_ft,
                plot_depth_ft: plotData.plot_depth_ft,

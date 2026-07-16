@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useConsultationStore } from '../store/consultationStore';
-import { parsePrompt, generateBlueprint, generateBlueprintStream } from '../api/plotit';
+import { parsePrompt, generateBlueprint, generateBlueprintStream, setAuthTokenGetter } from '../api/plotit';
+import { UserButton, useAuth } from '@clerk/clerk-react';
 
 // New Components
 import DashboardLayout from '../components/layout/DashboardLayout';
@@ -39,6 +40,13 @@ export default function Home() {
      // Ref to hold the parsed plotData from the initial prompt (before consultation)
      const parsedPlotDataRef = React.useRef(null);
      const activeStreamRef = React.useRef(null);
+
+     const { getToken } = useAuth();
+
+     // Register token getter with API interceptors
+     useEffect(() => {
+          setAuthTokenGetter(getToken);
+     }, [getToken]);
 
      // Effects: Check for saved drafts on mount
      useEffect(() => {
@@ -265,13 +273,11 @@ export default function Home() {
                                    <div className="flex items-center gap-4 pointer-events-auto">
                                         <button className="text-label-caps text-on-surface-variant uppercase px-3 py-1.5 border border-outline-variant rounded hover:bg-surface-variant transition-colors">Share</button>
                                         <button className="text-label-caps bg-primary text-on-primary uppercase px-4 py-1.5 rounded font-bold shadow-[0_0_10px_rgba(138,235,255,0.3)] hover:bg-primary-fixed transition-colors">Export DWG</button>
-                                        <div className="flex gap-4 border-l border-outline-variant/30 pl-4 ml-2">
+                                        <div className="flex gap-4 border-l border-outline-variant/30 pl-4 ml-2 items-center">
                                              <button className="text-on-surface-variant hover:text-primary transition-colors flex items-center">
                                                   <Bell size={18} />
                                              </button>
-                                             <button className="text-on-surface-variant hover:text-primary transition-colors flex items-center">
-                                                  <User size={18} />
-                                             </button>
+                                             <UserButton afterSignOutUrl="/" />
                                         </div>
                                    </div>
                               </header>
