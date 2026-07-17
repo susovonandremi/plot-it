@@ -71,6 +71,8 @@ export default function Home() {
                 ? recommendationPlotSize
                 : (plotInfo.plot_size_sqft || 1200);
 
+           let progressInterval = null;
+
            try {
                 const stream = generateBlueprintStream({
                      plot_size_sqft: plot_size,
@@ -95,9 +97,24 @@ export default function Home() {
                 setChatHistory(prev => [...prev, { role: 'assistant', content: `Done! Here is your ${plot_size} sqft plan.` }]);
            } catch (err) {
                 console.warn("WebSocket streaming failed, attempting REST fallback...", err);
-                // Reset progress so the user doesn't see a stale percentage
-                setGenerationProgress({ progress: 0, stage: 'fallback' });
                 setChatHistory(prev => [...prev, { role: 'system', content: "Streaming timed out — falling back to standard generation..." }]);
+                
+                // Start a progress bar simulation for REST fallback
+                setGenerationProgress({ progress: 5, stage: 'building_program' });
+                let currentProgress = 5;
+                progressInterval = setInterval(() => {
+                     currentProgress += Math.floor(Math.random() * 6) + 3; // increment by 3-8%
+                     if (currentProgress > 95) currentProgress = 95;
+                     
+                     let stage = 'solving';
+                     if (currentProgress > 30 && currentProgress <= 65) {
+                          stage = 'validating';
+                     } else if (currentProgress > 65) {
+                          stage = 'rendering';
+                     }
+                     setGenerationProgress({ progress: currentProgress, stage });
+                }, 400);
+
                 try {
                      const fallbackData = await generateBlueprint({
                           plot_size_sqft: plot_size,
@@ -117,6 +134,9 @@ export default function Home() {
                      setChatHistory(prev => [...prev, { role: 'error', content: `Critical: ${fallbackErr.message || 'Server error'}` }]);
                 }
            } finally {
+                if (progressInterval) {
+                     clearInterval(progressInterval);
+                }
                 activeStreamRef.current = null;
                 setIsGenerating(false);
            }

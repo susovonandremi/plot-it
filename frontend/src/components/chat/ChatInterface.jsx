@@ -146,10 +146,53 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
                                                         <button 
                                                              onClick={() => {
                                                                   const defaultQuestions = [
-                                                                       { id: "plot_dimensions", question: "What are your plot dimensions? (e.g., 30x40, 40x60)", options: ["30x40", "40x60", "20x30", "Other"] },
-                                                                       { id: "bedrooms", question: "How many bedrooms do you need?", options: ["1 BHK", "2 BHK", "3 BHK", "4 BHK"] },
-                                                                       { id: "floors", question: "How many floors?", options: ["1 Floor (Ground only)", "2 Floors (G+1)", "3 Floors (G+2)"] },
-                                                                       { id: "entry", question: "Which side is the entrance road?", options: ["East", "West", "North", "South"] }
+                                                                       { 
+                                                                            id: "plot_dimensions", 
+                                                                            text: "What are your plot dimensions? (e.g., 30x40, 40x60)", 
+                                                                            type: "single_select",
+                                                                            required: true,
+                                                                            options: [
+                                                                                 { id: "30x40", label: "30x40" },
+                                                                                 { id: "40x60", label: "40x60" },
+                                                                                 { id: "20x30", label: "20x30" },
+                                                                                 { id: "Other", label: "Other" }
+                                                                            ]
+                                                                       },
+                                                                       { 
+                                                                            id: "bedrooms", 
+                                                                            text: "How many bedrooms do you need?", 
+                                                                            type: "single_select",
+                                                                            required: true,
+                                                                            options: [
+                                                                                 { id: "1 BHK", label: "1 BHK" },
+                                                                                 { id: "2 BHK", label: "2 BHK" },
+                                                                                 { id: "3 BHK", label: "3 BHK" },
+                                                                                 { id: "4 BHK", label: "4 BHK" }
+                                                                            ]
+                                                                       },
+                                                                       { 
+                                                                            id: "floors", 
+                                                                            text: "How many floors?", 
+                                                                            type: "single_select",
+                                                                            required: true,
+                                                                            options: [
+                                                                                 { id: "1", label: "1 Floor (Ground only)" },
+                                                                                 { id: "2", label: "2 Floors (G+1)" },
+                                                                                 { id: "3", label: "3 Floors (G+2)" }
+                                                                            ]
+                                                                       },
+                                                                       { 
+                                                                            id: "entry", 
+                                                                            text: "Which side is the entrance road?", 
+                                                                            type: "single_select",
+                                                                            required: true,
+                                                                            options: [
+                                                                                 { id: "E", label: "East" },
+                                                                                 { id: "W", label: "West" },
+                                                                                 { id: "N", label: "North" },
+                                                                                 { id: "S", label: "South" }
+                                                                            ]
+                                                                       }
                                                                   ];
                                                                   useConsultationStore.getState().startConsultation(defaultQuestions, {
                                                                        plot_size_sqft: 1200,
@@ -180,42 +223,58 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
                               </motion.div>
                          ))}
 
-                         {isGenerating && generationProgress ? (
-                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-start gap-2 w-full mt-4">
-                                   <div className="flex items-center gap-2">
-                                        <Bot size={14} className="text-primary animate-pulse" />
-                                        <span className="text-[10px] text-primary font-label-caps uppercase">Kernel Processing</span>
-                                   </div>
-                                   <div className="border border-primary/30 bg-primary/5 rounded-r-lg rounded-bl-lg p-4 w-full shadow-[inset_0_0_20px_rgba(138,235,255,0.02)]">
-                                        <div className="flex items-center justify-between border-b border-outline-variant/50 pb-2 mb-3">
-                                             <span className="text-body-sm text-primary font-semibold">Generating Blueprint...</span>
-                                             <span className="text-data-mono text-primary">{Math.round(generationProgress.progress)}%</span>
-                                        </div>
-                                        <p className="text-data-mono text-xs text-on-surface-variant animate-pulse">
-                                             &gt; {stageMap[generationProgress.stage] || "Finalizing"}...
-                                        </p>
-                                        <div className="mt-4 h-1.5 w-full bg-surface-container rounded-full overflow-hidden border border-outline-variant/30 relative">
-                                             <div className="absolute top-0 left-0 h-full bg-primary shadow-[0_0_10px_rgba(138,235,255,0.5)] transition-all duration-300" style={{ width: `${generationProgress.progress}%` }}></div>
-                                        </div>
-                                   </div>
-                              </motion.div>
-                         ) : isLoading && !isGenerating && (
-                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-start gap-2 w-full mt-4">
-                                   <div className="flex items-center gap-2">
-                                        <Bot size={14} className="text-primary animate-pulse" />
-                                        <span className="text-[10px] text-primary font-label-caps uppercase">PlotIt Kernel</span>
-                                   </div>
-                                   <div className="border border-primary/30 bg-primary/5 rounded-r-lg rounded-bl-lg p-3 shadow-[inset_0_0_20px_rgba(138,235,255,0.02)] flex items-center gap-1.5">
-                                        <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                                        <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                                        <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"></span>
-                                   </div>
-                              </motion.div>
-                         )}
-
                          <ConsultationModal onGenerate={onConsultationGenerate} />
                     </AnimatePresence>
                </div>
+               
+               {/* Pinned Loading Status Box */}
+               <AnimatePresence>
+                    {isGenerating && generationProgress && (
+                         <motion.div 
+                              initial={{ opacity: 0, y: 15 }} 
+                              animate={{ opacity: 1, y: 0 }} 
+                              exit={{ opacity: 0, y: 15 }}
+                              className="px-4 py-3 border-t border-outline-variant bg-surface-container-low shrink-0 z-20"
+                         >
+                              <div className="flex items-center gap-2 mb-2">
+                                   <Bot size={14} className="text-primary animate-pulse" />
+                                   <span className="text-[10px] text-primary font-label-caps uppercase tracking-wider">Kernel Solver Processing</span>
+                              </div>
+                              <div className="border border-primary/20 bg-surface rounded-lg p-3.5 shadow-md">
+                                   <div className="flex items-center justify-between border-b border-outline-variant/30 pb-2 mb-2.5">
+                                        <span className="text-xs text-primary font-semibold">Generating Blueprint...</span>
+                                        <span className="text-data-mono text-xs text-primary font-bold">{Math.round(generationProgress.progress)}%</span>
+                                   </div>
+                                   <p className="text-data-mono text-[11px] text-on-surface-variant animate-pulse mb-3">
+                                        &gt; {stageMap[generationProgress.stage] || "Finalizing"}...
+                                   </p>
+                                   <div className="h-1.5 w-full bg-surface-container rounded-full overflow-hidden border border-outline-variant/30 relative">
+                                        <div className="absolute top-0 left-0 h-full bg-primary shadow-[0_0_10px_rgba(138,235,255,0.5)] transition-all duration-300" style={{ width: `${generationProgress.progress}%` }}></div>
+                                   </div>
+                              </div>
+                         </motion.div>
+                    )}
+
+                    {isLoading && !isGenerating && (
+                         <motion.div 
+                              initial={{ opacity: 0, y: 15 }} 
+                              animate={{ opacity: 1, y: 0 }} 
+                              exit={{ opacity: 0, y: 15 }}
+                              className="px-4 py-3 border-t border-outline-variant bg-surface-container-low shrink-0 z-20"
+                         >
+                              <div className="flex items-center gap-2 mb-2">
+                                   <Bot size={14} className="text-primary animate-pulse" />
+                                   <span className="text-[10px] text-primary font-label-caps uppercase tracking-wider">PlotIt Kernel</span>
+                              </div>
+                              <div className="border border-primary/20 bg-surface rounded-lg p-3 flex items-center gap-1.5 shadow-md">
+                                   <span className="text-xs text-on-surface-variant font-medium mr-1.5">Kernel is thinking</span>
+                                   <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                   <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                   <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"></span>
+                              </div>
+                         </motion.div>
+                    )}
+               </AnimatePresence>
                
                {/* Input Area */}
                <div className="p-4 border-t border-outline-variant bg-surface-container shrink-0">
