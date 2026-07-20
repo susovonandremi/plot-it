@@ -43,6 +43,14 @@ export const generateBlueprint = async (requestData) => {
           return response.data.data;
      } catch (error) {
           console.error("Error generating blueprint:", error);
+          const detail = error.response?.data?.detail;
+          if (detail) {
+               const msg = typeof detail === 'string' ? detail : (detail.message || JSON.stringify(detail));
+               const customErr = new Error(msg);
+               customErr.status = error.response?.status;
+               customErr.detail = detail;
+               throw customErr;
+          }
           throw error;
      }
 };
@@ -96,15 +104,24 @@ export const generateBlueprintStream = (requestData, onMessage) => {
           ws.onmessage = (event) => {
                resetHeartbeat();
                try {
-                    const { event: eventName, data } = JSON.parse(event.data);
-                    onMessage(eventName, data);
-                    if (eventName === 'complete') {
+                    const parsed = JSON.parse(event.data);
+                    const eventName = parsed.event || parsed.type;
+                    const data = parsed.data || parsed;
+                    
+                    if (eventName === 'stage') {
+                         onMessage('stage', data);
+                    } else if (eventName === 'complete') {
+                         onMessage('complete', data);
                          didComplete = true;
                          settle(resolve, data);
                          try { ws.close(); } catch (_) {}
-                    }
-                    if (eventName === 'error') {
-                         settle(reject, new Error(data?.message || 'Stream error'));
+                    } else if (eventName === 'error') {
+                         onMessage('error', data);
+                         const errorMsg = data?.message || parsed?.message || 'Stream error';
+                         const err = new Error(errorMsg);
+                         err.isStreamError = true;
+                         err.detail = errorMsg;
+                         settle(reject, err);
                          try { ws.close(); } catch (_) {}
                     }
                } catch (e) {

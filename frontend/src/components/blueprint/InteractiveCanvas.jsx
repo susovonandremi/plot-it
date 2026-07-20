@@ -1,14 +1,16 @@
 import React, { useState, useRef, useId } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import {
      ZoomIn, ZoomOut, RotateCcw, Layers, Download, Image as ImageIcon,
      FileText, Code, ChevronDown, Hammer, Ruler, Flame, CheckCircle, AlertTriangle,
-     Bot, Loader2
+     Bot, Loader2, Sparkles
 } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { jsPDF } from 'jspdf';
 import 'svg2pdf.js';
 import BlueprintRenderer from './BlueprintRenderer';
+import GenerationProgress from '../GenerationProgress';
 
 // Strict SVG sanitization via DOMPurify — strips <script>, event handlers,
 // javascript: URIs, foreignObject, and any non-SVG payloads.
@@ -20,6 +22,12 @@ const sanitizeSvg = (rawSvg) => {
           FORBID_ATTR: ['href', 'xlink:href'],
      });
 };
+
+/**
+ * Shared button classes for glassmorphism micro-interactions.
+ * All canvas controls use this for a cohesive premium feel.
+ */
+const glassButtonBase = "transition-all duration-200 hover:-translate-y-0.5 active:scale-95 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-surface outline-none cursor-pointer";
 
 export default function InteractiveCanvas({
      blueprintSvg,
@@ -85,8 +93,6 @@ export default function InteractiveCanvas({
           // Strategy 2: Derive from schema metadata (uses coordinateTransform constants)
           if (isJsonSchema && parsedSchema?.metadata) {
                const { plot_width_ft, plot_height_ft } = parsedSchema.metadata;
-               // Mirror the computeViewBox formula from coordinateTransform.js
-               // SCALE=30, PADDING=80, title block=120
                const w = plot_width_ft * 30.0 + 2 * 80.0;
                const h = plot_height_ft * 30.0 + 2 * 80.0 + 120.0;
                const aspect = w / h;
@@ -113,7 +119,6 @@ export default function InteractiveCanvas({
                const svgData = new XMLSerializer().serializeToString(clonedSvg);
 
                if (format === 'svg') {
-                    // Embed font references directly in the SVG for portability
                     const fontStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
                     fontStyle.textContent = `@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Archivo:wght@700&display=swap');`;
                     const defsEl = clonedSvg.querySelector('defs') || clonedSvg.insertBefore(
@@ -134,21 +139,17 @@ export default function InteractiveCanvas({
                }
 
                if (format === 'pdf') {
-                    // Vector PDF export via svg2pdf.js — retains infinite zoom clarity,
-                    // selectable text, and proper vector paths. No rasterization.
                     try {
                          const pdf = new jsPDF({
                               orientation: width > height ? 'landscape' : 'portrait',
                               unit: 'px',
                               format: [width, height],
                          });
-                         // svg2pdf.js augments jsPDF with a .svg() method
                          await pdf.svg(clonedSvg, { x: 0, y: 0, width, height });
                          pdf.save('plot-ai-blueprint.pdf');
                          return;
                     } catch (vectorErr) {
                          console.warn('svg2pdf.js vector export failed, falling back to high-DPI raster:', vectorErr);
-                         // Fall through to raster fallback below
                     }
                }
 
@@ -178,7 +179,6 @@ export default function InteractiveCanvas({
                          link.click();
                          document.body.removeChild(link);
                     } else if (format === 'pdf') {
-                         // Fallback: high-DPI PNG embedded in PDF
                          const pdf = new jsPDF({
                               orientation: width > height ? 'landscape' : 'portrait',
                               unit: 'px',
@@ -197,110 +197,136 @@ export default function InteractiveCanvas({
           }
      };
 
+     // ─── EMPTY STATE ─────────────────────────────────────────────────
      if (!blueprintSvg && !isGenerating) {
           return (
                <div className="h-full w-full flex flex-col items-center justify-center text-on-surface-variant bg-transparent relative z-10">
-                    {/* Architectural Grid Background for empty state */}
-                    <div className="absolute inset-0 bg-[linear-gradient(rgba(138,235,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(138,235,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,#000_10%,transparent_100%)] pointer-events-none"></div>
+                    {/* Architectural grid background */}
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(138,235,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(138,235,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,#000_10%,transparent_100%)] pointer-events-none" />
 
-                    <div className="relative flex flex-col items-center z-10">
-                         {/* Premium Icon / Graphic */}
-                         <div className="w-24 h-24 mb-6 relative flex items-center justify-center">
-                              <div className="absolute inset-0 border border-primary/20 rotate-45 rounded-xl shadow-[0_0_30px_rgba(138,235,255,0.1)]"></div>
-                              <div className="absolute inset-2 border border-primary/40 -rotate-12 rounded-lg opacity-50"></div>
-                              <span className="material-symbols-outlined text-5xl text-primary/80 drop-shadow-[0_0_10px_rgba(138,235,255,0.3)]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                                   Architecture
-                              </span>
+                    <motion.div
+                         initial={{ opacity: 0, y: 16 }}
+                         animate={{ opacity: 1, y: 0 }}
+                         transition={{ duration: 0.5, ease: 'easeOut' }}
+                         className="relative flex flex-col items-center z-10"
+                    >
+                         {/* Premium geometric icon */}
+                         <div className="w-20 h-20 mb-6 relative flex items-center justify-center">
+                              <div className="absolute inset-0 border border-primary/15 rotate-45 rounded-xl" />
+                              <div className="absolute inset-3 border border-primary/25 -rotate-12 rounded-lg opacity-60" />
+                              <Layers size={32} className="text-primary/70 animate-float" />
                          </div>
 
-                         <h3 className="text-headline-md font-bold text-on-surface mb-2 font-mono tracking-wide">NO BLUEPRINT LOADED</h3>
-                         <p className="text-body-sm text-on-surface-variant max-w-sm text-center opacity-80 leading-relaxed">
-                              Use the CAD Copilot to generate a property layout, or upload an existing project to begin visualization.
+                         <h3 className="text-xl font-bold text-on-surface mb-2 tracking-wide">No Blueprint Loaded</h3>
+                         <p className="text-body-sm text-on-surface-variant max-w-sm text-center opacity-70 leading-relaxed">
+                              Use the Copilot to generate a property layout, or start a new analysis from the sidebar.
                          </p>
 
-                         {/* Quick-start hint chips */}
+                         {/* Hint chips */}
                          <div className="mt-8 flex flex-col items-center gap-2 max-w-md">
-                              <span className="text-[10px] text-on-surface-variant/50 uppercase tracking-widest mb-1">Try asking the copilot →</span>
+                              <span className="text-[10px] text-on-surface-variant/40 uppercase tracking-[0.15em] font-data-mono mb-1">Try asking the copilot</span>
                               <div className="flex flex-wrap justify-center gap-2">
-                                   <span className="text-[11px] px-3 py-1.5 rounded-full border border-primary/20 text-primary/60 bg-primary/5">"3BHK 1200 sqft east-facing"</span>
-                                   <span className="text-[11px] px-3 py-1.5 rounded-full border border-primary/20 text-primary/60 bg-primary/5">"Kerala courtyard villa"</span>
-                                   <span className="text-[11px] px-3 py-1.5 rounded-full border border-primary/20 text-primary/60 bg-primary/5">"2-floor duplex with Vastu"</span>
+                                   <span className="text-[11px] px-3 py-1.5 rounded-full border border-primary/15 text-primary/50 bg-primary/5">"3BHK 1200 sqft east-facing"</span>
+                                   <span className="text-[11px] px-3 py-1.5 rounded-full border border-primary/15 text-primary/50 bg-primary/5">"Kerala courtyard villa"</span>
                               </div>
                          </div>
-                    </div>
+                    </motion.div>
                </div>
           );
      }
 
+     // ─── GENERATING STATE ────────────────────────────────────────────
      if (!blueprintSvg && isGenerating) {
-          const progressPercent = generationProgress?.progress || 0;
-          const currentStage = generationProgress?.stage || 'parsing';
-          const stageLabelMap = {
-               'parsing': 'Parsing requirements & LLM design inference',
-               'building_program': 'Building room layout configurations',
-               'setbacks': 'Calculating property municipal setbacks',
-               'solving': 'Optimizing rooms layout via CP-SAT solver',
-               'validating': 'Checking vastu zone alignment rules',
-               'rendering': 'Generating detailed architectural blueprint'
-          };
           return (
-               <div className="h-full w-full flex flex-col items-center justify-center text-primary bg-transparent relative z-10 p-6 animate-in fade-in duration-300">
-                    <div className="w-96 h-64 border border-primary/30 rounded-xl flex flex-col items-center justify-center p-8 relative overflow-hidden bg-surface-container-high/80 backdrop-blur-md shadow-[0_0_30px_rgba(138,235,255,0.15)]">
-                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent -translate-x-[100%] animate-[shimmer_2s_infinite]" />
-                         <Bot size={48} className="text-primary mb-4 animate-bounce" />
-                         <span className="text-sm font-bold text-on-surface tracking-wide mb-1">Architectural Solver Active</span>
-                         <span className="text-[11px] text-on-surface-variant/80 font-light text-center mb-6 h-4">
-                              {stageLabelMap[currentStage] || 'Processing layout request...'}
-                         </span>
-                         
-                         {/* Dynamic Progress Bar */}
-                         <div className="w-full h-1.5 bg-surface-variant/50 rounded-full overflow-hidden border border-outline-variant/30 relative mb-2">
-                              <div 
-                                   className="absolute top-0 left-0 h-full bg-primary shadow-[0_0_10px_rgba(138,235,255,0.5)] transition-all duration-300" 
-                                   style={{ width: `${progressPercent}%` }}
-                              />
-                         </div>
-                         <span className="text-[10px] font-data-mono text-primary font-bold">
-                              {Math.round(progressPercent)}% Completed
-                         </span>
-                    </div>
+               <div className="h-full w-full flex items-center justify-center bg-transparent relative z-10">
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(138,235,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(138,235,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,#000_10%,transparent_100%)] pointer-events-none" />
+                    <GenerationProgress
+                         progress={generationProgress?.progress || 0}
+                         stage={generationProgress?.stage || 'parsing'}
+                    />
                </div>
           );
      }
 
+     // ─── ACTIVE STATE (Blueprint loaded) ─────────────────────────────
      return (
           <div className="h-full w-full relative overflow-hidden group">
-               {/* Floating Toolbar (Top Center) */}
-               <div className="absolute top-20 left-1/2 -translate-x-1/2 glass-panel rounded-lg px-2 py-1.5 flex items-center gap-1.5 z-20 pointer-events-auto shadow-lg">
-                    <button onClick={() => setShowStructure(!showStructure)} className={`px-2.5 py-1 rounded text-label-caps transition-colors flex items-center gap-1.5 ${showStructure ? 'bg-primary/20 text-primary border border-primary/30' : 'text-on-surface-variant hover:bg-white/5 border border-transparent'}`}>
+               {/* ── Floating Layer Toolbar (Top Center) ──────────── */}
+               <motion.div
+                    initial={{ opacity: 0, y: -12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.2 }}
+                    className="absolute top-20 left-1/2 -translate-x-1/2 glass-surface rounded-xl px-2 py-1.5 flex items-center gap-1 z-20 pointer-events-auto"
+               >
+                    <button
+                         onClick={() => setShowStructure(!showStructure)}
+                         className={`${glassButtonBase} px-2.5 py-1.5 rounded-lg text-label-caps flex items-center gap-1.5 ${
+                              showStructure
+                                   ? 'bg-primary/15 text-primary border border-primary/25 shadow-[0_0_8px_rgba(138,235,255,0.1)]'
+                                   : 'text-on-surface-variant hover:bg-white/5 border border-transparent'
+                         }`}
+                    >
                          <Hammer size={14} />
                          Walls
                     </button>
-                    <div className="w-px h-4 bg-outline-variant mx-1"></div>
-                    <button onClick={() => setShowRooms(!showRooms)} className={`px-2.5 py-1 rounded text-label-caps transition-colors flex items-center gap-1.5 ${showRooms ? 'bg-primary/20 text-primary border border-primary/30' : 'text-on-surface-variant hover:bg-white/5 border border-transparent'}`}>
+                    <div className="w-px h-4 bg-outline-variant/30 mx-0.5" />
+                    <button
+                         onClick={() => setShowRooms(!showRooms)}
+                         className={`${glassButtonBase} px-2.5 py-1.5 rounded-lg text-label-caps flex items-center gap-1.5 ${
+                              showRooms
+                                   ? 'bg-primary/15 text-primary border border-primary/25 shadow-[0_0_8px_rgba(138,235,255,0.1)]'
+                                   : 'text-on-surface-variant hover:bg-white/5 border border-transparent'
+                         }`}
+                    >
                          Rooms
                     </button>
-                    <button onClick={() => setShowFurniture(!showFurniture)} className={`px-2.5 py-1 rounded text-label-caps transition-colors flex items-center gap-1.5 ${showFurniture ? 'bg-primary/20 text-primary border border-primary/30' : 'text-on-surface-variant hover:bg-white/5 border border-transparent'}`}>
+                    <button
+                         onClick={() => setShowFurniture(!showFurniture)}
+                         className={`${glassButtonBase} px-2.5 py-1.5 rounded-lg text-label-caps flex items-center gap-1.5 ${
+                              showFurniture
+                                   ? 'bg-primary/15 text-primary border border-primary/25 shadow-[0_0_8px_rgba(138,235,255,0.1)]'
+                                   : 'text-on-surface-variant hover:bg-white/5 border border-transparent'
+                         }`}
+                    >
                          Furniture
                     </button>
-                    <button onClick={() => setShowDims(!showDims)} className={`px-2.5 py-1 rounded text-label-caps transition-colors flex items-center gap-1.5 ${showDims ? 'bg-primary/20 text-primary border border-primary/30' : 'text-on-surface-variant hover:bg-white/5 border border-transparent'}`}>
+                    <button
+                         onClick={() => setShowDims(!showDims)}
+                         className={`${glassButtonBase} px-2.5 py-1.5 rounded-lg text-label-caps flex items-center gap-1.5 ${
+                              showDims
+                                   ? 'bg-primary/15 text-primary border border-primary/25 shadow-[0_0_8px_rgba(138,235,255,0.1)]'
+                                   : 'text-on-surface-variant hover:bg-white/5 border border-transparent'
+                         }`}
+                    >
                          <Ruler size={14} />
                          Dims
                     </button>
-                    <div className="w-px h-4 bg-outline-variant mx-1"></div>
-                    <button onClick={() => setShowVastu(!showVastu)} className={`px-2.5 py-1 rounded text-label-caps transition-colors flex items-center gap-1.5 ${showVastu ? 'bg-secondary/20 text-secondary border border-secondary/30' : 'text-on-surface-variant hover:bg-white/5 border border-transparent'}`}>
+                    <div className="w-px h-4 bg-outline-variant/30 mx-0.5" />
+                    <button
+                         onClick={() => setShowVastu(!showVastu)}
+                         className={`${glassButtonBase} px-2.5 py-1.5 rounded-lg text-label-caps flex items-center gap-1.5 ${
+                              showVastu
+                                   ? 'bg-secondary/15 text-secondary border border-secondary/25 shadow-[0_0_8px_rgba(69,223,164,0.1)]'
+                                   : 'text-on-surface-variant hover:bg-white/5 border border-transparent'
+                         }`}
+                    >
                          <Flame size={14} />
                          Vastu Heat
                     </button>
-               </div>
+               </motion.div>
 
-               {/* Download Menu (Top Right) */}
-               <div className="absolute top-20 right-6 z-20 pointer-events-auto">
+               {/* ── Export Menu (Top Right) ───────────────────────── */}
+               <motion.div
+                    initial={{ opacity: 0, y: -12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.3 }}
+                    className="absolute top-20 right-6 z-50 pointer-events-auto"
+               >
                     <div className="relative">
                          <button
                               onClick={() => setShowDownloadMenu(!showDownloadMenu)}
                               disabled={isExporting}
-                              className="flex items-center gap-2 bg-glass backdrop-blur-md border border-white/10 rounded px-3 py-2 text-sm font-medium text-on-surface hover:bg-white/10 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                              className={`${glassButtonBase} flex items-center gap-2 glass-surface rounded-xl px-4 py-2.5 text-sm font-medium text-on-surface disabled:opacity-50 disabled:cursor-not-allowed`}
                          >
                               {isExporting ? (
                                    <><Loader2 size={16} className="animate-spin" /> Exporting...</>
@@ -310,59 +336,77 @@ export default function InteractiveCanvas({
                               <ChevronDown size={14} className={`transition-transform duration-200 ${showDownloadMenu ? 'rotate-180' : ''}`} />
                          </button>
 
-                         {showDownloadMenu && (
-                              <div className="absolute top-full right-0 mt-2 w-36 bg-surface-container border border-outline-variant rounded shadow-xl overflow-hidden py-1 z-50 animate-in fade-in slide-in-from-top-2">
-                                   <button onClick={() => handleDownload('png')} className="w-full text-left px-4 py-2 text-sm text-on-surface hover:bg-surface-variant hover:text-primary flex items-center gap-2">
-                                        <ImageIcon size={14} className="text-primary" /> PNG Image
-                                   </button>
-                                   <button onClick={() => handleDownload('pdf')} className="w-full text-left px-4 py-2 text-sm text-on-surface hover:bg-surface-variant hover:text-primary flex items-center gap-2">
-                                        <FileText size={14} className="text-error" /> PDF Document
-                                   </button>
-                                   <button onClick={() => handleDownload('svg')} className="w-full text-left px-4 py-2 text-sm text-on-surface hover:bg-surface-variant hover:text-primary flex items-center gap-2">
-                                        <Code size={14} className="text-secondary" /> SVG Vector
-                                   </button>
-                              </div>
-                         )}
+                         <AnimatePresence>
+                              {showDownloadMenu && (
+                                   <motion.div
+                                        initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                                        transition={{ duration: 0.15 }}
+                                        className="absolute top-full right-0 mt-2 w-40 glass-surface rounded-xl overflow-hidden py-1.5 z-50 shadow-2xl bg-surface-container-high/95 backdrop-blur-xl"
+                                   >
+                                        <button onClick={() => handleDownload('png')} className={`${glassButtonBase} w-full text-left px-4 py-2.5 text-sm text-on-surface hover:bg-white/5 flex items-center gap-2.5`}>
+                                             <ImageIcon size={14} className="text-primary" /> PNG Image
+                                        </button>
+                                        <button onClick={() => handleDownload('pdf')} className={`${glassButtonBase} w-full text-left px-4 py-2.5 text-sm text-on-surface hover:bg-white/5 flex items-center gap-2.5`}>
+                                             <FileText size={14} className="text-error" /> PDF Document
+                                        </button>
+                                        <button onClick={() => handleDownload('svg')} className={`${glassButtonBase} w-full text-left px-4 py-2.5 text-sm text-on-surface hover:bg-white/5 flex items-center gap-2.5`}>
+                                             <Code size={14} className="text-secondary" /> SVG Vector
+                                        </button>
+                                   </motion.div>
+                              )}
+                         </AnimatePresence>
                     </div>
-               </div>
+               </motion.div>
 
-               {/* Overall Grade Card (Top Right, floating below Export) */}
-               {blueprintScore && (
-                    <div className="absolute top-36 right-6 z-20 pointer-events-auto bg-surface-container/95 border border-outline-variant rounded-lg p-4 shadow-2xl w-64 backdrop-blur-md animate-in fade-in slide-in-from-top-4 duration-300">
-                         <div className="flex justify-between items-start mb-4">
-                              <div>
-                                   <span className="text-[10px] font-data-mono text-on-surface-variant uppercase tracking-widest block mb-1">Overall Grade</span>
-                                   <div className="flex items-baseline">
-                                        <span className="text-3xl font-bold text-primary font-mono">{blueprintScore.grade}</span>
-                                        <span className="text-xs text-secondary font-bold uppercase tracking-wider ml-2">{blueprintScore.label}</span>
+               {/* ── Score Card (Top Right, below Export) ──────────── */}
+               <AnimatePresence>
+                    {blueprintScore && (
+                         <motion.div
+                              initial={{ opacity: 0, y: -16, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: -16, scale: 0.95 }}
+                              transition={{ duration: 0.4, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                              className="absolute top-36 right-6 z-10 pointer-events-auto glass-surface rounded-xl p-4 w-64"
+                         >
+                              <div className="flex justify-between items-start mb-4">
+                                   <div>
+                                        <span className="text-[10px] font-data-mono text-on-surface-variant uppercase tracking-widest block mb-1">Overall Grade</span>
+                                        <div className="flex items-baseline">
+                                             <span className="text-3xl font-bold text-primary font-mono">{blueprintScore.grade}</span>
+                                             <span className="text-xs text-secondary font-bold uppercase tracking-wider ml-2">{blueprintScore.label}</span>
+                                        </div>
                                    </div>
+                                   <span className="text-secondary">
+                                        {blueprintScore.overall >= 70 ? (
+                                             <CheckCircle size={24} className="text-secondary" />
+                                        ) : (
+                                             <AlertTriangle size={24} className="text-error" />
+                                        )}
+                                   </span>
                               </div>
-                              <span className="text-secondary">
-                                   {blueprintScore.overall >= 70 ? (
-                                        <CheckCircle size={24} className="text-secondary" />
-                                   ) : (
-                                        <AlertTriangle size={24} className="text-error" />
-                                   )}
-                              </span>
-                         </div>
-                         <div className="space-y-3">
-                              {Object.entries(blueprintScore.axes || {}).map(([key, val]) => (
-                                   <div key={key} className="space-y-1.5">
-                                        <div className="flex justify-between text-[10px] font-data-mono text-on-surface-variant">
-                                             <span>{axisLabels[key] || key.replace('_', ' ')}</span>
-                                             <span className="text-primary font-bold">{Math.round(val)}</span>
+                              <div className="space-y-3">
+                                   {Object.entries(blueprintScore.axes || {}).map(([key, val]) => (
+                                        <div key={key} className="space-y-1.5">
+                                             <div className="flex justify-between text-[10px] font-data-mono text-on-surface-variant">
+                                                  <span>{axisLabels[key] || key.replace('_', ' ')}</span>
+                                                  <span className="text-primary font-bold">{Math.round(val)}</span>
+                                             </div>
+                                             <div className="h-1 bg-surface-container-low rounded-full overflow-hidden border border-outline-variant/10">
+                                                  <motion.div
+                                                       className="h-full bg-primary"
+                                                       initial={{ width: 0 }}
+                                                       animate={{ width: `${Math.round(val)}%` }}
+                                                       transition={{ duration: 0.8, delay: 0.5, ease: 'easeOut' }}
+                                                  />
+                                             </div>
                                         </div>
-                                        <div className="h-1 bg-surface-container-low rounded-full overflow-hidden border border-outline-variant/10">
-                                             <div
-                                                  className="h-full bg-primary transition-all duration-500"
-                                                  style={{ width: `${Math.round(val)}%` }}
-                                             />
-                                        </div>
-                                   </div>
-                              ))}
-                         </div>
-                    </div>
-               )}
+                                   ))}
+                              </div>
+                         </motion.div>
+                    )}
+               </AnimatePresence>
 
                <TransformWrapper
                     initialScale={0.85}
@@ -378,23 +422,34 @@ export default function InteractiveCanvas({
                >
                     {({ zoomIn, zoomOut, resetTransform }) => (
                          <>
-                              {/* Zoom Toolbar */}
-                              <div className="absolute top-20 left-6 z-20 flex flex-col bg-glass backdrop-blur-md border border-white/10 rounded p-1 gap-1 shadow-lg pointer-events-auto">
-                                   <button onClick={() => zoomIn()} className="p-2 hover:bg-white/10 rounded text-on-surface-variant hover:text-primary transition-colors duration-200" title="Zoom In">
-                                        <ZoomIn size={20} />
+                              {/* ── Zoom Toolbar (Left) ────────────────── */}
+                              <motion.div
+                                   initial={{ opacity: 0, x: -12 }}
+                                   animate={{ opacity: 1, x: 0 }}
+                                   transition={{ duration: 0.4, delay: 0.25 }}
+                                   className="absolute top-20 left-6 z-20 flex flex-col glass-surface rounded-xl p-1.5 gap-1 pointer-events-auto"
+                              >
+                                   <button onClick={() => zoomIn()} className={`${glassButtonBase} p-2.5 hover:bg-white/8 rounded-lg text-on-surface-variant hover:text-primary`} title="Zoom In">
+                                        <ZoomIn size={18} />
                                    </button>
-                                   <button onClick={() => zoomOut()} className="p-2 hover:bg-white/10 rounded text-on-surface-variant hover:text-primary transition-colors duration-200" title="Zoom Out">
-                                        <ZoomOut size={20} />
+                                   <button onClick={() => zoomOut()} className={`${glassButtonBase} p-2.5 hover:bg-white/8 rounded-lg text-on-surface-variant hover:text-primary`} title="Zoom Out">
+                                        <ZoomOut size={18} />
                                    </button>
-                                   <button onClick={() => resetTransform()} className="p-2 hover:bg-white/10 rounded text-on-surface-variant hover:text-primary transition-colors duration-200" title="Reset View">
-                                        <RotateCcw size={20} />
+                                   <div className="w-full h-px bg-outline-variant/20 my-0.5" />
+                                   <button onClick={() => resetTransform()} className={`${glassButtonBase} p-2.5 hover:bg-white/8 rounded-lg text-on-surface-variant hover:text-primary`} title="Reset View">
+                                        <RotateCcw size={18} />
                                    </button>
-                              </div>
+                              </motion.div>
 
-                              {/* Floor Selector */}
+                              {/* ── Floor Selector (Bottom Left) ────────── */}
                               {floorSvgs && typeof floorSvgs === 'object' && Object.keys(floorSvgs).length > 1 && (
-                                   <div className="absolute bottom-6 left-6 z-50 flex bg-surface-container/90 backdrop-blur-2xl border border-outline-variant rounded-lg p-1.5 shadow-2xl pointer-events-auto items-center gap-1 animate-in slide-in-from-bottom-4 duration-500">
-                                        <div className="px-3 py-1 flex items-center gap-2 border-r border-outline-variant mr-1">
+                                   <motion.div
+                                        initial={{ opacity: 0, y: 16 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.4, delay: 0.35 }}
+                                        className="absolute bottom-6 left-6 z-50 flex glass-surface rounded-xl p-1.5 pointer-events-auto items-center gap-1"
+                                   >
+                                        <div className="px-3 py-1 flex items-center gap-2 border-r border-outline-variant/20 mr-1">
                                              <Layers size={14} className="text-on-surface-variant" />
                                              <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest hidden sm:inline">Floors</span>
                                         </div>
@@ -402,15 +457,15 @@ export default function InteractiveCanvas({
                                              <button
                                                   key={f}
                                                   onClick={() => onFloorChange(f)}
-                                                  className={`px-3 py-1.5 rounded text-xs font-bold transition-all duration-300 ${activeFloor === f
-                                                            ? 'bg-primary text-on-primary shadow-[0_0_10px_rgba(138,235,255,0.3)] scale-105'
+                                                  className={`${glassButtonBase} px-3 py-1.5 rounded-lg text-xs font-bold ${activeFloor === f
+                                                            ? 'bg-primary text-on-primary shadow-[0_0_12px_rgba(138,235,255,0.3)] scale-105'
                                                             : 'text-on-surface-variant hover:text-on-surface hover:bg-white/5'
                                                        }`}
                                              >
                                                   {(floorLabels?.[f] || `F${f}`).split(' ')[0]}
                                              </button>
                                         ))}
-                                   </div>
+                                   </motion.div>
                               )}
 
                               <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">

@@ -69,12 +69,12 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
      return (
           <>
                {/* Chat Header */}
-               <div className="px-4 py-3 border-b border-outline-variant bg-surface-container-high flex justify-between items-center shrink-0">
+               <div className="px-4 py-3 border-b border-outline-variant/30 bg-surface-container-high/80 backdrop-blur-sm flex justify-between items-center shrink-0">
                     <div className="flex items-center gap-2">
-                         <div className="w-2 h-2 rounded-full bg-secondary animate-pulse"></div>
+                         <div className="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_rgba(69,223,164,0.4)] animate-pulse"></div>
                          <span className="text-label-caps text-on-surface uppercase tracking-widest">Active Session</span>
                     </div>
-                    <span className="text-data-mono text-xs text-on-surface-variant">ID: PLT-{sessionId}</span>
+                    <span className="text-data-mono text-xs text-on-surface-variant/70">ID: PLT-{sessionId}</span>
                </div>
                
                {/* Chat History */}
@@ -92,7 +92,7 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
                                    <h2 className="text-headline-md font-bold text-on-surface">Design your vision</h2>
                                    <p className="text-body-sm text-on-surface-variant">Describe your plan in plain words...</p>
                                    <div className="flex flex-col gap-3 mt-6 w-full max-w-sm mx-auto">
-                                        <button onClick={() => handleChipClick("Generate a 3BHK 1200 sqft east-facing house, strictly Vastu compliant.")} className="group relative w-full text-left bg-surface-container border border-outline-variant/50 rounded-xl p-3 hover:border-primary/50 hover:bg-surface-variant/50 transition-all duration-300 overflow-hidden shadow-sm">
+                                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => handleChipClick("Generate a 3BHK 1200 sqft east-facing house, strictly Vastu compliant.")} className="group relative w-full text-left bg-surface-container border border-outline-variant/50 rounded-xl p-3 hover:border-primary/50 hover:bg-surface-variant/50 transition-all duration-300 overflow-hidden shadow-sm">
                                              <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
                                              <div className="flex items-center gap-3 relative z-10">
                                                   <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
@@ -103,9 +103,9 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
                                                        <span className="text-[10px] text-on-surface-variant/70 font-mono tracking-tight">1200 SQFT • EAST FACING</span>
                                                   </div>
                                              </div>
-                                        </button>
+                                        </motion.button>
                                         
-                                        <button onClick={() => handleChipClick("Create a Kerala-style 2000 sqft house featuring a central courtyard and verandah.")} className="group relative w-full text-left bg-surface-container border border-outline-variant/50 rounded-xl p-3 hover:border-primary/50 hover:bg-surface-variant/50 transition-all duration-300 overflow-hidden shadow-sm">
+                                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => handleChipClick("Create a Kerala-style 2000 sqft house featuring a central courtyard and verandah.")} className="group relative w-full text-left bg-surface-container border border-outline-variant/50 rounded-xl p-3 hover:border-primary/50 hover:bg-surface-variant/50 transition-all duration-300 overflow-hidden shadow-sm">
                                              <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
                                              <div className="flex items-center gap-3 relative z-10">
                                                   <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
@@ -116,7 +116,7 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
                                                        <span className="text-[10px] text-on-surface-variant/70 font-mono tracking-tight">2000 SQFT • KERALA STYLE</span>
                                                   </div>
                                              </div>
-                                        </button>
+                                        </motion.button>
                                    </div>
                               </motion.div>
                          )}
@@ -234,22 +234,22 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
                               initial={{ opacity: 0, y: 15 }} 
                               animate={{ opacity: 1, y: 0 }} 
                               exit={{ opacity: 0, y: 15 }}
-                              className="px-4 py-3 border-t border-outline-variant bg-surface-container-low shrink-0 z-20"
+                              className="px-4 py-3 border-t border-outline-variant/20 glass-surface shrink-0 z-20"
                          >
                               <div className="flex items-center gap-2 mb-2">
                                    <Bot size={14} className="text-primary animate-pulse" />
                                    <span className="text-[10px] text-primary font-label-caps uppercase tracking-wider">Kernel Solver Processing</span>
                               </div>
-                              <div className="border border-primary/20 bg-surface rounded-lg p-3.5 shadow-md">
-                                   <div className="flex items-center justify-between border-b border-outline-variant/30 pb-2 mb-2.5">
+                              <div className="border border-primary/15 bg-surface/50 rounded-xl p-3.5 shadow-lg backdrop-blur-sm">
+                                   <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2 mb-2.5">
                                         <span className="text-xs text-primary font-semibold">Generating Blueprint...</span>
-                                        <span className="text-data-mono text-xs text-primary font-bold">{Math.round(generationProgress.progress)}%</span>
+                                        <span className="text-data-mono text-xs text-primary font-bold tabular-nums">{Math.round(generationProgress.progress)}%</span>
                                    </div>
                                    <p className="text-data-mono text-[11px] text-on-surface-variant animate-pulse mb-3">
                                         &gt; {stageMap[generationProgress.stage] || "Finalizing"}...
                                    </p>
-                                   <div className="h-1.5 w-full bg-surface-container rounded-full overflow-hidden border border-outline-variant/30 relative">
-                                        <div className="absolute top-0 left-0 h-full bg-primary shadow-[0_0_10px_rgba(138,235,255,0.5)] transition-all duration-300" style={{ width: `${generationProgress.progress}%` }}></div>
+                                   <div className="h-1.5 w-full bg-surface-container rounded-full overflow-hidden border border-outline-variant/20 relative">
+                                        <div className="absolute top-0 left-0 h-full rounded-full bg-gradient-to-r from-primary-container to-primary shadow-[0_0_12px_rgba(138,235,255,0.5)] transition-all duration-500" style={{ width: `${generationProgress.progress}%` }}></div>
                                    </div>
                               </div>
                          </motion.div>
@@ -260,24 +260,24 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
                               initial={{ opacity: 0, y: 15 }} 
                               animate={{ opacity: 1, y: 0 }} 
                               exit={{ opacity: 0, y: 15 }}
-                              className="px-4 py-3 border-t border-outline-variant bg-surface-container-low shrink-0 z-20"
+                              className="px-4 py-3 border-t border-outline-variant/20 glass-surface shrink-0 z-20"
                          >
                               <div className="flex items-center gap-2 mb-2">
                                    <Bot size={14} className="text-primary animate-pulse" />
                                    <span className="text-[10px] text-primary font-label-caps uppercase tracking-wider">PlotIt Kernel</span>
                               </div>
-                              <div className="border border-primary/20 bg-surface rounded-lg p-3 flex items-center gap-1.5 shadow-md">
+                              <div className="border border-primary/15 bg-surface/50 rounded-xl p-3 flex items-center gap-1.5 shadow-lg backdrop-blur-sm">
                                    <span className="text-xs text-on-surface-variant font-medium mr-1.5">Kernel is thinking</span>
-                                   <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                                   <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                                   <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"></span>
+                                   <span className="w-1.5 h-1.5 bg-primary rounded-full shadow-[0_0_6px_rgba(138,235,255,0.4)] animate-bounce [animation-delay:-0.3s]"></span>
+                                   <span className="w-1.5 h-1.5 bg-primary rounded-full shadow-[0_0_6px_rgba(138,235,255,0.4)] animate-bounce [animation-delay:-0.15s]"></span>
+                                   <span className="w-1.5 h-1.5 bg-primary rounded-full shadow-[0_0_6px_rgba(138,235,255,0.4)] animate-bounce"></span>
                               </div>
                          </motion.div>
                     )}
                </AnimatePresence>
                
                {/* Input Area */}
-               <div className="p-4 border-t border-outline-variant bg-surface-container shrink-0">
+               <div className="p-4 border-t border-outline-variant/20 bg-surface-container/80 backdrop-blur-sm shrink-0">
                     {isConsultationActive ? (
                          <div className="bg-surface border border-primary/20 rounded-lg p-3.5 flex items-center justify-center gap-2.5 shadow-[inset_0_0_15px_rgba(138,235,255,0.02)] animate-pulse">
                               <SlidersHorizontal size={14} className="text-primary" />

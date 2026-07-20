@@ -57,8 +57,10 @@ M_TO_FT = 3.28084
 
 # Minimum square-footage estimates for feasibility check
 MIN_ESTIMATES = {
-    "BEDROOM": 100, "BATHROOM": 35, "KITCHEN": 80,
-    "DINING": 80, "LIVING": 120,
+    "BEDROOM": 100, "MASTER_BEDROOM": 120, "BATHROOM": 35, "TOILET": 20,
+    "KITCHEN": 80, "DINING": 80, "LIVING": 120, "DRAWING": 120,
+    "PASSAGE": 30, "CORRIDOR": 30, "STAIRCASE": 60, "LIFT": 25,
+    "POOJA": 15, "STAIR_ROOM": 60, "BALCONY": 30, "VERANDAH": 40,
 }
 
 
@@ -275,13 +277,14 @@ async def run_generation_pipeline(p: PipelineParams) -> PipelineResult:
             if not r.get("is_external", False)
         ]
         floor_min_required = sum(
-            MIN_ESTIMATES.get(r["type"].upper(), 50) * (r.get("count") or 1)
+            r.get("target_area") or r.get("min_area") or r.get("area") or (MIN_ESTIMATES.get(r["type"].upper(), 50) * (r.get("count") or 1))
             for r in floor_check_rooms
         )
         if floor_min_required > buildable_area_sqft * 0.95:
+            req_sqft = int(round(floor_min_required))
+            bld_sqft = int(round(buildable_area_sqft))
             raise ValueError(
-                f"Floor {check_fn} layout too large ({floor_min_required} sqft min) "
-                f"for the buildable plot area ({round(buildable_area_sqft, 1)} sqft after setbacks)."
+                f"The requested rooms ({req_sqft} sqft) exceed the buildable plot area ({bld_sqft} sqft) after municipal setbacks."
             )
 
     # ── 5. Multi-Floor Sequential Pipeline ───────────────────────────

@@ -118,6 +118,51 @@ body {
     stroke-dasharray: 4, 4;
 }
 
+/* ──────────────────────────────────────────────────────────────
+   Premium UI Utilities — Added for the cinematic overhaul
+   ────────────────────────────────────────────────────────────── */
+
+/* Glassmorphism surface — use on floating toolbars, cards, panels */
+.glass-surface {
+    background-color: rgba(23, 31, 51, 0.70);
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.35),
+        inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Shimmer — horizontal light sweep for progress bars & skeletons */
+@keyframes shimmer {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+/* Pulse glow — breathing neon halo for hero prompt & active elements */
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(138, 235, 255, 0.15), 0 0 60px rgba(138, 235, 255, 0.05); }
+    50%      { box-shadow: 0 0 30px rgba(138, 235, 255, 0.30), 0 0 80px rgba(138, 235, 255, 0.10); }
+}
+
+/* Gentle float — subtle up/down for decorative elements */
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-8px); }
+}
+
+/* Progress bar glow animation */
+@keyframes progress-glow {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+/* Utility animation classes */
+.animate-shimmer       { animation: shimmer 2s infinite; }
+.animate-pulse-glow    { animation: pulse-glow 3s ease-in-out infinite; }
+.animate-float         { animation: float 4s ease-in-out infinite; }
+.animate-progress-glow { animation: progress-glow 2s linear infinite; }
+
 /* Custom scrollbars */
 .chat-scroll::-webkit-scrollbar,
 .custom-scrollbar::-webkit-scrollbar {

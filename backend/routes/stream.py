@@ -86,7 +86,17 @@ async def stream_generate(ws: WebSocket):
     except json.JSONDecodeError as e:
         await _emit(ws, "error", {"message": f"Invalid JSON payload: {str(e)}"})
     except ValueError as ve:
-        await _emit(ws, "error", {"message": str(ve)})
+        logger.warning("Validation/feasibility error in WebSocket stream: %s", str(ve))
+        try:
+            await ws.send_text(json.dumps({
+                "type": "error",
+                "event": "error",
+                "message": str(ve),
+                "data": {"message": str(ve)}
+            }))
+            await ws.close(code=1000)
+        except Exception:
+            pass
     except Exception as e:
         import uuid
         import traceback
