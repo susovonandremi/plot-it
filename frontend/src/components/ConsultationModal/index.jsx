@@ -22,7 +22,7 @@ export default function ConsultationModal({ onGenerate }) {
                     <SlidersHorizontal size={14} className="text-primary" />
                     <span className="text-[10px] text-primary font-label-caps uppercase">Consultation Mode</span>
                </div>
-               <div className="border border-primary/30 bg-surface-container-highest rounded-r-lg rounded-bl-lg p-4 w-full shadow-[0_0_15px_rgba(138,235,255,0.1)] overflow-hidden">
+               <div className="border border-primary/30 bg-surface-container-highest rounded-r-lg rounded-bl-lg p-4 w-fit max-w-[85%] shadow-[0_0_15px_rgba(138,235,255,0.1)] overflow-hidden">
                     {recommendation ? (
                          <RecommendationCard onGenerate={onGenerate} />
                     ) : (

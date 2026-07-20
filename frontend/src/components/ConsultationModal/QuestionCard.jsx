@@ -6,6 +6,27 @@ import { recommendRooms } from '@/api/plotit';
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight, Loader2, BarChart3 } from 'lucide-react';
 
+const getPlaceholder = (question) => {
+     if (question.placeholder) return question.placeholder;
+     const text = (question.text || '').toLowerCase();
+     const id = (question.id || '').toLowerCase();
+
+     const isAreaOrSize = id.includes('area') || id.includes('size') || id.includes('sqft') || id.includes('dimen') ||
+                          text.includes('area') || text.includes('size') || text.includes('sqft') || text.includes('dimension');
+     if (isAreaOrSize) {
+          return "e.g., 1200";
+     }
+
+     const isRoomCount = id.includes('room') || id.includes('bed') || id.includes('bath') || id.includes('kitchen') || 
+                         id.includes('toilet') || id.includes('floor') || id.includes('count') ||
+                         text.includes('how many') || text.includes('number of') || text.includes('kitchen') || text.includes('bathroom');
+     if (isRoomCount) {
+          return "e.g., 2";
+     }
+
+     return question.type === 'number' ? "e.g., 2" : "Type your answer here...";
+};
+
 export default function QuestionCard({ question, questionNumber }) {
      const {
           answers,
@@ -22,14 +43,14 @@ export default function QuestionCard({ question, questionNumber }) {
      // Initialize state based on question type
      const [localAnswer, setLocalAnswer] = useState(() => {
           const stored = answers[question.id];
-          if (stored !== undefined) return stored;
+          if (stored !== undefined && stored !== null) return stored;
           return question.type === 'multi_select' ? [] : '';
      });
 
      // Sync state if answers change (e.g. from draft restore) or question changes
      useEffect(() => {
           const stored = answers[question.id];
-          if (stored !== undefined) {
+          if (stored !== undefined && stored !== null) {
                setLocalAnswer(stored);
           } else {
                setLocalAnswer(question.type === 'multi_select' ? [] : '');
@@ -105,23 +126,26 @@ export default function QuestionCard({ question, questionNumber }) {
                          ))
                     ) : question.type === 'number' ? (
                          <input
+                              key={question.id}
                               type="number"
                               className="w-full max-w-[200px] p-3 border rounded border-outline-variant bg-surface text-on-surface text-xs font-mono placeholder:text-on-surface-variant/40 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-all"
-                              placeholder="e.g. 1200"
-                              value={localAnswer}
+                              placeholder={getPlaceholder(question)}
+                              value={typeof localAnswer === 'string' || typeof localAnswer === 'number' ? localAnswer : ''}
                               onChange={handleTextChange}
                               autoFocus
                          />
                     ) : (
                          <textarea
+                              key={question.id}
                               className="w-full h-24 p-3 border rounded border-outline-variant bg-surface text-on-surface text-xs font-mono placeholder:text-on-surface-variant/40 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none resize-none transition-all"
-                              placeholder="Type your answer here..."
+                              placeholder={getPlaceholder(question)}
                               value={typeof localAnswer === 'string' ? localAnswer : ''}
                               onChange={handleTextChange}
                               autoFocus
                          />
                     )}
                </div>
+
 
                {/* Navigation Footer */}
                <div className="flex items-center justify-between pt-4 border-t border-outline-variant/30">

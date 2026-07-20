@@ -130,7 +130,7 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
                               >
                                    {msg.role === 'user' ? (
                                         <div className="flex flex-col items-end gap-1 w-full">
-                                             <div className="bg-surface-container-highest border border-outline-variant rounded-l-lg rounded-tr-lg p-3 max-w-[85%]">
+                                             <div className="bg-surface-container-highest border border-outline-variant rounded-l-lg rounded-tr-lg p-3 w-fit max-w-[85%]">
                                                   <p className="text-body-sm text-on-surface whitespace-pre-wrap">{msg.content}</p>
                                              </div>
                                         </div>
@@ -140,7 +140,7 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
                                                   <AlertTriangle size={14} className="text-error" />
                                                   <span className="text-[10px] text-error font-label-caps uppercase">System Error</span>
                                              </div>
-                                              <div className="border border-error/50 bg-error/10 rounded-r-lg rounded-bl-lg p-3 max-w-[85%] shadow-[inset_0_0_10px_rgba(255,180,171,0.05)]">
+                                              <div className="border border-error/50 bg-error/10 rounded-r-lg rounded-bl-lg p-3 w-fit max-w-[85%] shadow-[inset_0_0_10px_rgba(255,180,171,0.05)]">
                                                    <p className="text-body-sm text-error">{msg.content}</p>
                                                    {msg.content.includes("configure") && (
                                                         <button 
@@ -215,7 +215,7 @@ export default function ChatInterface({ history, onSend, isLoading, isGenerating
                                                   <Bot size={14} className="text-primary" />
                                                   <span className="text-[10px] text-primary font-label-caps uppercase">PlotIt Kernel</span>
                                              </div>
-                                             <div className="border border-primary/30 bg-primary/5 rounded-r-lg rounded-bl-lg p-4 w-full shadow-[inset_0_0_20px_rgba(138,235,255,0.02)]">
+                                             <div className="border border-primary/30 bg-primary/5 rounded-r-lg rounded-bl-lg p-4 w-fit max-w-[85%] shadow-[inset_0_0_20px_rgba(138,235,255,0.02)]">
                                                   <p className="text-body-sm text-on-surface whitespace-pre-wrap">{msg.content}</p>
                                              </div>
                                         </div>
